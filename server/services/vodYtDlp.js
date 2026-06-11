@@ -647,6 +647,7 @@ function listResumableMovies() {
 }
 
 module.exports = {
+  ytdlpJson,
   safeFilename,
   destBaseFromMovie,
   logRelForMovie,

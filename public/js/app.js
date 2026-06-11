@@ -453,14 +453,60 @@ function isIosSafariWeb() {
   return isAppleMobile() && !VIX_NATIVE_APP;
 }
 
-/** iPhone/iPad (Safari y app) no permiten autoplay de YouTube en iframe de fondo. */
+/** App iOS nativa (Capacitor): tráiler con <video> + stream del servidor (no iframe YouTube). */
+function trailerUsesNativePlayer() {
+  return isCapacitorIos() || (VIX_NATIVE_APP && isAppleMobile());
+}
+
+/** iPhone/iPad web: sin tráiler de fondo. App nativa iOS: sí con <video>. */
 function heroBackgroundTrailerSupported() {
+  if (trailerUsesNativePlayer()) return true;
   return !isAppleMobile();
 }
 
 function heroTrailerUsesAudio() {
+  if (trailerUsesNativePlayer()) return true;
   if (isAppleMobile()) return false;
   return true;
+}
+
+const trailerPlayCache = new Map();
+
+async function fetchTrailerPlayUrl(youtubeKey) {
+  const id = normalizeYoutubeKey(youtubeKey);
+  if (!id) throw new Error('Tráiler no disponible');
+  const cached = trailerPlayCache.get(id);
+  if (cached && cached.expires > Date.now()) return cached;
+  const data = await api(`/trailers/youtube/${encodeURIComponent(id)}`);
+  const entry = {
+    id,
+    playUrl: data.playUrl,
+    mime: data.mime || 'video/mp4',
+    title: data.title || 'Tráiler',
+    expires: Date.now() + 40 * 60 * 1000
+  };
+  trailerPlayCache.set(id, entry);
+  return entry;
+}
+
+function mountNativeTrailerVideo(container, playUrl, { muted = false, loop = false, controls = true, autoplay = true } = {}) {
+  if (!container) return null;
+  container.innerHTML = `<video
+    class="trailer-native-video"
+    playsinline
+    webkit-playsinline
+    x-webkit-airplay="allow"
+    ${controls ? 'controls' : ''}
+    ${muted ? 'muted' : ''}
+    ${loop ? 'loop' : ''}
+    ${autoplay ? 'autoplay' : ''}
+    preload="auto"></video>`;
+  const video = container.querySelector('video');
+  if (!video) return null;
+  video.src = playUrl;
+  video.load();
+  if (autoplay) video.play().catch(() => {});
+  return video;
 }
 
 function youtubeEmbedHost() {
@@ -532,12 +578,28 @@ function bindTrailerModal() {
   $('#trailer-modal-backdrop')?.addEventListener('click', closeTrailerModal);
 }
 
-function openTrailerModal(youtubeKey) {
+async function openTrailerModal(youtubeKey) {
   if (!youtubeKey) return toast('Tráiler no disponible', true);
   bindTrailerModal();
   const modal = $('#trailer-modal');
   const player = $('#trailer-modal-player');
   if (!modal || !player) return;
+  modal.classList.remove('hidden');
+
+  if (trailerUsesNativePlayer()) {
+    player.innerHTML = '<p class="trailer-ios-hint">Cargando tráiler…</p>';
+    try {
+      const info = await fetchTrailerPlayUrl(youtubeKey);
+      player.innerHTML = '';
+      mountNativeTrailerVideo(player, info.playUrl, { muted: false, loop: false, controls: true, autoplay: true });
+    } catch (err) {
+      player.innerHTML = '';
+      toast(err.message || 'Tráiler no disponible', true);
+      modal.classList.add('hidden');
+    }
+    return;
+  }
+
   const apple = isAppleMobile();
   const embedUrl = heroTrailerEmbedUrl(youtubeKey, { withControls: true });
   const iosHint = apple
@@ -552,7 +614,6 @@ function openTrailerModal(youtubeKey) {
     allowfullscreen
     playsinline
     webkit-playsinline></iframe>`;
-  modal.classList.remove('hidden');
   const iframe = player.querySelector('iframe');
   if (iframe) {
     if (apple) {
@@ -3860,6 +3921,9 @@ function bindHeroPlay(slide) {
 }
 
 function stopHeroVideos() {
+  $$('.hero-slide-video video').forEach((v) => {
+    try { v.pause(); } catch { /* ignore */ }
+  });
   $$('.hero-slide-video').forEach(el => { el.innerHTML = ''; });
   $$('.hero-slide').forEach(el => el.classList.remove('has-trailer', 'has-trailer-audio'));
   $('#hero-banner')?.classList.remove('hero-has-trailer', 'hero-has-trailer-audio');
@@ -3876,7 +3940,7 @@ function syncHeroTrailerAudioBtn() {
     btn.classList.add('hidden');
     return;
   }
-  if (isAppleMobile()) {
+  if (isAppleMobile() && !trailerUsesNativePlayer()) {
     btn.classList.remove('hidden');
     btn.textContent = '▶';
     btn.setAttribute('aria-label', 'Reproducir tráiler');
@@ -3917,7 +3981,7 @@ function toggleHeroTrailerAudio() {
   const slide = heroSlides[heroIndex];
   const key = normalizeYoutubeKey(slide?.trailer);
   if (!key) return;
-  if (isAppleMobile()) {
+  if (isAppleMobile() && !trailerUsesNativePlayer()) {
     openTrailerModal(key);
     return;
   }
@@ -3925,15 +3989,21 @@ function toggleHeroTrailerAudio() {
   const slideEl = document.querySelector('.hero-slide.active');
   slideEl?.classList.toggle('has-trailer-audio', heroTrailerAudioOn);
   $('#hero-banner')?.classList.toggle('hero-has-trailer-audio', heroTrailerAudioOn);
-  const iframe = slideEl?.querySelector('.hero-slide-video iframe');
-  setHeroTrailerIframeAudio(iframe);
-  if (heroTrailerAudioOn) {
-    setTimeout(() => setHeroTrailerIframeAudio(iframe), 300);
+  const video = slideEl?.querySelector('.hero-slide-video video');
+  if (video) {
+    video.muted = !heroTrailerAudioOn;
+    if (heroTrailerAudioOn) video.play().catch(() => {});
+  } else {
+    const iframe = slideEl?.querySelector('.hero-slide-video iframe');
+    setHeroTrailerIframeAudio(iframe);
+    if (heroTrailerAudioOn) {
+      setTimeout(() => setHeroTrailerIframeAudio(iframe), 300);
+    }
   }
   syncHeroTrailerAudioBtn();
 }
 
-function playHeroTrailer(index) {
+async function playHeroTrailer(index) {
   stopHeroVideos();
   const slide = heroSlides[index];
   const key = normalizeYoutubeKey(slide?.trailer);
@@ -3944,13 +4014,37 @@ function playHeroTrailer(index) {
   }
   const wrap = $(`.hero-slide[data-index="${index}"] .hero-slide-video`);
   if (!wrap) return;
-  const embedUrl = heroTrailerEmbedUrl(key, { background: true });
-  if (!embedUrl) return;
   const slideEl = wrap.closest('.hero-slide');
   slideEl?.classList.add('has-trailer');
   if (heroTrailerAudioOn) slideEl?.classList.add('has-trailer-audio');
   $('#hero-banner')?.classList.add('hero-has-trailer');
   if (heroTrailerAudioOn) $('#hero-banner')?.classList.add('hero-has-trailer-audio');
+
+  if (trailerUsesNativePlayer()) {
+    try {
+      const info = await fetchTrailerPlayUrl(key);
+      if (heroIndex !== index) return;
+      const video = mountNativeTrailerVideo(wrap, info.playUrl, {
+        muted: !heroTrailerAudioOn,
+        loop: true,
+        controls: false,
+        autoplay: true
+      });
+      if (video) {
+        video.addEventListener('ended', () => {
+          if (heroIndex === index) video.play().catch(() => {});
+        });
+      }
+    } catch {
+      slideEl?.classList.remove('has-trailer', 'has-trailer-audio');
+      $('#hero-banner')?.classList.remove('hero-has-trailer', 'hero-has-trailer-audio');
+    }
+    syncHeroTrailerAudioBtn();
+    return;
+  }
+
+  const embedUrl = heroTrailerEmbedUrl(key, { background: true });
+  if (!embedUrl) return;
   wrap.innerHTML = `<iframe
     src=""
     data-src="${escHtml(embedUrl)}"

@@ -132,6 +132,7 @@ app.use('/api/catalog', catalogRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/app', appRoutes);
+app.use('/api/trailers', require('./routes/trailers'));
 
 function sendPublicApk(res, filename) {
   const full = path.join(DATA, 'apk', filename);
