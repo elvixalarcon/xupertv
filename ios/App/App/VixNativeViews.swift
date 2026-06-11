@@ -179,7 +179,7 @@ struct HomeNativeView: View {
 
     private let storefronts: [(slug: String, title: String, icon: String)] = [
         ("destacados", "Destacados", "star.fill"),
-        ("kids", "Kids", "figure.and.child.holdinghands"),
+        ("kids", "Kids", "heart.fill"),
         ("anime", "Anime", "sparkles")
     ]
 
