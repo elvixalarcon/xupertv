@@ -34,6 +34,7 @@ enum VixImageLoader {
 enum VixUIKitPlayer {
     private static var progressObserver: Any?
     private static var progressHandler: ((Double, Double) -> Void)?
+    private static var statusObserver: NSKeyValueObservation?
 
     static func activateAudioSession() {
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
@@ -41,11 +42,21 @@ enum VixUIKitPlayer {
     }
 
     static func playerItem(for url: URL, token: String) -> AVPlayerItem {
-        guard !token.isEmpty else { return AVPlayerItem(url: url) }
-        let asset = AVURLAsset(url: url, options: [
-            "AVURLAssetHTTPHeaderFieldsKey": ["Authorization": "Bearer \(token)"]
-        ])
-        return AVPlayerItem(asset: asset)
+        let path = url.absoluteString
+        let needsAuth = path.contains("/api/live/") && !path.contains("token=")
+        if needsAuth, !token.isEmpty {
+            let asset = AVURLAsset(url: url, options: [
+                "AVURLAssetHTTPHeaderFieldsKey": ["Authorization": "Bearer \(token)"]
+            ])
+            return AVPlayerItem(asset: asset)
+        }
+        return AVPlayerItem(url: url)
+    }
+
+    private static func topPresenter(from vc: UIViewController) -> UIViewController {
+        var target = vc
+        while let presented = target.presentedViewController { target = presented }
+        return target
     }
 
     static func playFullscreen(
@@ -54,13 +65,28 @@ enum VixUIKitPlayer {
         startAt: Double = 0,
         onProgress: ((Double, Double) -> Void)? = nil
     ) {
+        playFullscreen(from: vc, url: url, startAt: startAt, allowTranscodeFallback: true, onProgress: onProgress)
+    }
+
+    private static func playFullscreen(
+        from vc: UIViewController,
+        url: URL,
+        startAt: Double,
+        allowTranscodeFallback: Bool,
+        onProgress: ((Double, Double) -> Void)?
+    ) {
         activateAudioSession()
         clearProgressObserver()
         progressHandler = onProgress
         let token = AuthSession.shared.api.token
         let item = playerItem(for: url, token: token)
+        let isStream = url.absoluteString.contains("/api/stream/")
+        if isStream {
+            item.preferredPeakBitRate = 0
+            item.preferredForwardBufferDuration = 30
+        }
         let player = AVPlayer(playerItem: item)
-        player.automaticallyWaitsToMinimizeStalling = true
+        player.automaticallyWaitsToMinimizeStalling = !isStream
         if let onProgress {
             progressObserver = player.addPeriodicTimeObserver(
                 forInterval: CMTime(seconds: 15, preferredTimescale: 1),
@@ -70,10 +96,23 @@ enum VixUIKitPlayer {
                 if dur.isFinite && dur > 0 { onProgress(t.seconds, dur) }
             }
         }
+        statusObserver = item.observe(\.status, options: [.new]) { [weak vc] observed, _ in
+            guard observed.status == .failed, allowTranscodeFallback, isStream, let vc else { return }
+            guard var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
+            var query = parts.queryItems ?? []
+            if query.contains(where: { $0.name == "transcode" }) { return }
+            query.append(URLQueryItem(name: "transcode", value: "1"))
+            parts.queryItems = query
+            guard let retry = parts.url else { return }
+            DispatchQueue.main.async {
+                vc.presentedViewController?.dismiss(animated: false)
+                playFullscreen(from: vc, url: retry, startAt: startAt, allowTranscodeFallback: false, onProgress: onProgress)
+            }
+        }
         let pvc = AVPlayerViewController()
         pvc.player = player
         pvc.modalPresentationStyle = .fullScreen
-        vc.present(pvc, animated: true) {
+        topPresenter(from: vc).present(pvc, animated: true) {
             if startAt > 5 {
                 player.seek(to: CMTime(seconds: startAt, preferredTimescale: 600)) { _ in player.play() }
             } else {
@@ -85,6 +124,7 @@ enum VixUIKitPlayer {
     private static func clearProgressObserver() {
         progressHandler = nil
         progressObserver = nil
+        statusObserver = nil
     }
 
     static func attachLive(player: inout AVPlayer?, playerVC: AVPlayerViewController, url: URL) {
@@ -118,31 +158,6 @@ enum VixUIKitPlayer {
         playerVC?.player = nil
         player = nil
     }
-}
-
-final class VixBrandLogoView: UIView {
-    private let letter = UILabel()
-
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        backgroundColor = UIColor(red: 0.03, green: 0.03, blue: 0.05, alpha: 1)
-        layer.cornerRadius = 8
-        layer.borderWidth = 0.5
-        layer.borderColor = UIColor(white: 1, alpha: 0.12).cgColor
-        clipsToBounds = true
-        letter.text = "V"
-        letter.font = .systemFont(ofSize: 20, weight: .heavy)
-        letter.textColor = UIColor(red: 0.96, green: 0.77, blue: 0.09, alpha: 1)
-        letter.textAlignment = .center
-        letter.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(letter)
-        NSLayoutConstraint.activate([
-            letter.centerXAnchor.constraint(equalTo: centerXAnchor),
-            letter.centerYAnchor.constraint(equalTo: centerYAnchor)
-        ])
-    }
-
-    required init?(coder: NSCoder) { fatalError() }
 }
 
 enum VixMetaChip {
@@ -188,6 +203,7 @@ final class UIKitHomeViewController: UIViewController {
     private let searchField = UITextField()
     private let spinner = UIActivityIndicatorView(style: .large)
     private var heroTimer: Timer?
+    private weak var tabBarCell: VixTabCell?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -212,20 +228,10 @@ final class UIKitHomeViewController: UIViewController {
     }
 
     private func setupHeader() {
-        let logoMark = VixBrandLogoView()
-        logoMark.translatesAutoresizingMaskIntoConstraints = false
         let logo = UILabel()
-        logo.text = "ix TV"
+        logo.text = "Vix TV"
         logo.font = .boldSystemFont(ofSize: 22)
-        logo.textColor = .white
-        let logoRow = UIStackView(arrangedSubviews: [logoMark, logo])
-        logoRow.axis = .horizontal
-        logoRow.spacing = 8
-        logoRow.alignment = .center
-        NSLayoutConstraint.activate([
-            logoMark.widthAnchor.constraint(equalToConstant: 34),
-            logoMark.heightAnchor.constraint(equalToConstant: 34)
-        ])
+        logo.textColor = VixUITheme.accent
 
         searchField.placeholder = "Buscar por título…"
         searchField.textColor = .white
@@ -243,7 +249,7 @@ final class UIKitHomeViewController: UIViewController {
         profile.tintColor = VixUITheme.muted
         profile.addTarget(self, action: #selector(openAccount), for: .touchUpInside)
 
-        let top = UIStackView(arrangedSubviews: [logoRow, searchField, profile])
+        let top = UIStackView(arrangedSubviews: [logo, searchField, profile])
         top.axis = .horizontal
         top.spacing = 10
         top.alignment = .center
@@ -281,8 +287,10 @@ final class UIKitHomeViewController: UIViewController {
 
         let tabsReg = UICollectionView.CellRegistration<VixTabCell, HomeCatalogItem> { [weak self] cell, _, _ in
             guard let self else { return }
+            self.tabBarCell = cell
             cell.configure(tabs: self.tabs, selected: self.selectedTab) { slug in
                 self.selectedTab = slug
+                self.tabBarCell?.updateSelected(slug)
                 self.reloadContent()
             }
         }
@@ -443,7 +451,7 @@ final class UIKitHomeViewController: UIViewController {
         var snap = NSDiffableDataSourceSnapshot<Section, HomeCatalogItem>()
         snap.appendSections([.hero, .tabs])
         snap.appendItems([HomeCatalogItem(key: "hero", poster: CatalogPoster(id: -1, title: "", poster: nil, content_type: nil), progress: nil, duration: nil)], toSection: .hero)
-        snap.appendItems([HomeCatalogItem(key: "tabs", poster: CatalogPoster(id: -2, title: "", poster: nil, content_type: nil), progress: nil, duration: nil)], toSection: .tabs)
+        snap.appendItems([HomeCatalogItem(key: "tabs-\(selectedTab)", poster: CatalogPoster(id: -2, title: "", poster: nil, content_type: nil), progress: nil, duration: nil)], toSection: .tabs)
 
         if selectedTab == "inicio" && !continueItems.isEmpty {
             let sec = Section.row(id: "continue-watching", title: "Seguir viendo", subtitle: "Retoma donde lo dejaste")
@@ -703,6 +711,8 @@ final class VixHeroCarouselView: UIView {
 final class VixTabCell: UICollectionViewCell {
     private let scroll = UIScrollView()
     private let stack = UIStackView()
+    private var tabButtons: [String: UIButton] = [:]
+    private var onSelect: ((String) -> Void)?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -729,20 +739,37 @@ final class VixTabCell: UICollectionViewCell {
     required init?(coder: NSCoder) { fatalError() }
 
     func configure(tabs: [HomeTab], selected: String, onSelect: @escaping (String) -> Void) {
-        stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        for tab in tabs {
-            let btn = UIButton(type: .system)
-            btn.setTitle(tab.title, for: .normal)
-            btn.titleLabel?.font = .systemFont(ofSize: 14, weight: tab.slug == selected ? .bold : .medium)
-            let active = tab.slug == selected
+        self.onSelect = onSelect
+        if tabButtons.isEmpty {
+            for tab in tabs {
+                let btn = UIButton(type: .system)
+                btn.setTitle(tab.title, for: .normal)
+                btn.titleLabel?.font = .systemFont(ofSize: 14, weight: .medium)
+                btn.contentEdgeInsets = UIEdgeInsets(top: 8, left: 14, bottom: 8, right: 14)
+                btn.layer.cornerRadius = 18
+                let slug = tab.slug
+                btn.addAction(UIAction { [weak self] _ in
+                    self?.onSelect?(slug)
+                }, for: .touchUpInside)
+                tabButtons[slug] = btn
+                stack.addArrangedSubview(btn)
+            }
+        }
+        updateSelected(selected)
+    }
+
+    func updateSelected(_ selected: String) {
+        for (slug, btn) in tabButtons {
+            let active = slug == selected
+            btn.titleLabel?.font = .systemFont(ofSize: 14, weight: active ? .bold : .medium)
             btn.setTitleColor(active ? VixUITheme.accent : VixUITheme.muted, for: .normal)
-            btn.contentEdgeInsets = UIEdgeInsets(top: 8, left: 14, bottom: 8, right: 14)
-            btn.layer.cornerRadius = 18
             btn.layer.borderWidth = active ? 1 : 0
             btn.layer.borderColor = active ? VixUITheme.accent.withAlphaComponent(0.55).cgColor : nil
             btn.backgroundColor = active ? VixUITheme.accent.withAlphaComponent(0.12) : .clear
-            btn.addAction(UIAction { _ in onSelect(tab.slug) }, for: .touchUpInside)
-            stack.addArrangedSubview(btn)
+        }
+        if let btn = tabButtons[selected] {
+            let frame = btn.convert(btn.bounds, to: scroll)
+            scroll.scrollRectToVisible(frame.insetBy(dx: -16, dy: 0), animated: true)
         }
     }
 }
@@ -1375,6 +1402,7 @@ final class UIKitMovieDetailViewController: UIViewController {
                     self.playButton.isEnabled = hasVideo
                     self.playButton.alpha = hasVideo ? 1 : 0.45
                     self.buildSimilar(d.similar ?? [])
+                    if hasVideo && self.startAt > 5 { self.play() }
                 }
             } catch {
                 await MainActor.run {

@@ -303,6 +303,12 @@ enum PlayUrls {
         return p
     }
 
+    private static func encodeStreamRel(_ rel: String) -> String {
+        rel.split(separator: "/").map {
+            $0.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String($0)
+        }.joined(separator: "/")
+    }
+
     static func video(server: String, token: String, path: String, startAt: Double = 0) -> URL? {
         let normalized = normalizeMediaPath(path)
         let base = normalized.split(separator: "?").first.map(String.init) ?? normalized
@@ -312,8 +318,11 @@ enum PlayUrls {
             return URL(string: "\(server)/api/live/stream?url=\(enc)&token=\(tok)")
         }
         let lower = base.lowercased()
+        let encodedBase = base.split(separator: "/").map {
+            $0.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String($0)
+        }.joined(separator: "/")
         if base.hasPrefix("/uploads/"), [".mp4", ".webm", ".mov"].contains(where: { lower.hasSuffix($0) }) {
-            return URL(string: server + base)
+            return URL(string: server + (encodedBase.hasPrefix("/") ? encodedBase : "/" + encodedBase))
         }
         func withSeek(_ url: String) -> URL? {
             guard startAt > 5, lower.hasSuffix(".mkv") else { return URL(string: url) }
@@ -321,19 +330,19 @@ enum PlayUrls {
             return URL(string: "\(url)\(sep)t=\(Int(startAt))")
         }
         if base.hasPrefix("/uploads/movies/") {
-            let rel = String(base.dropFirst("/uploads/movies/".count))
+            let rel = encodeStreamRel(String(base.dropFirst("/uploads/movies/".count)))
             return withSeek("\(server)/api/stream/movies/\(rel)")
         }
         if base.hasPrefix("/uploads/series/") {
-            let rel = String(base.dropFirst("/uploads/series/".count))
+            let rel = encodeStreamRel(String(base.dropFirst("/uploads/series/".count)))
             return withSeek("\(server)/api/stream/series/\(rel)")
         }
         if base.hasPrefix("/uploads/winscp/") {
-            let rel = String(base.dropFirst("/uploads/winscp/".count))
+            let rel = encodeStreamRel(String(base.dropFirst("/uploads/winscp/".count)))
             return withSeek("\(server)/api/stream/winscp/\(rel)")
         }
-        if base.hasPrefix("/") { return URL(string: server + base) }
-        return URL(string: server + "/" + base)
+        if base.hasPrefix("/") { return URL(string: server + (encodedBase.hasPrefix("/") ? encodedBase : "/" + encodedBase)) }
+        return URL(string: server + "/" + encodedBase)
     }
 }
 

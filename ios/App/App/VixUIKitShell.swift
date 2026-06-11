@@ -1,22 +1,11 @@
 import UIKit
 import AVKit
-import SwiftUI
 
-// UIKit puro para iOS 17 — SwiftUI no renderiza si SwiftUICore no está en el sistema.
+// UIKit en todas las versiones (iOS 17+): misma interfaz Tele Latino en iPhone/iPad.
 
 enum VixAppRouter {
     static func rootViewController() -> UIViewController {
-        if #available(iOS 18.0, *) {
-            return makeSwiftUIHost()
-        }
-        return makeUIKitRoot()
-    }
-
-    @available(iOS 18.0, *)
-    private static func makeSwiftUIHost() -> UIViewController {
-        let host = UIHostingController(rootView: AnyView(NativeRootView().preferredColorScheme(.dark)))
-        host.view.backgroundColor = .black
-        return host
+        makeUIKitRoot()
     }
 
     private static func makeUIKitRoot() -> UIViewController {
@@ -91,11 +80,13 @@ final class UIKitLoginViewController: UIViewController {
         card.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(card)
 
-        let icon = VixBrandLogoView()
+        let icon = UIImageView(image: UIImage(systemName: "play.tv.fill"))
+        icon.tintColor = VixUITheme.accent
+        icon.contentMode = .scaleAspectFit
         icon.translatesAutoresizingMaskIntoConstraints = false
 
         let brand = UILabel()
-        brand.text = "ix TV"
+        brand.text = "Vix TV"
         brand.font = .boldSystemFont(ofSize: 34)
         brand.textColor = .white
         brand.textAlignment = .center
