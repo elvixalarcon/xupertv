@@ -172,7 +172,7 @@ final class UIKitHomeViewController: UIViewController {
     ]
 
     private var collectionView: UICollectionView!
-    private var dataSource: UICollectionViewDiffableDataSource<Section, CatalogPoster>!
+    private var dataSource: UICollectionViewDiffableDataSource<Section, HomeCatalogItem>!
     private var heroSlides: [HeroSlide] = []
     private var sections: [CatalogSection] = []
     private var continueItems: [WatchItem] = []
@@ -499,14 +499,14 @@ final class UIKitHomeViewController: UIViewController {
 
 extension UIKitHomeViewController: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        guard let item = dataSource.itemIdentifier(for: indexPath), item.poster.id > 0 else { return }
+        guard let catalogItem = dataSource.itemIdentifier(for: indexPath), catalogItem.poster.id > 0 else { return }
         let section = dataSource.snapshot().sectionIdentifiers[indexPath.section]
         guard case .row = section else { return }
-        if let watch = item.watch {
+        if let watch = catalogItem.watch {
             openWatch(watch)
             return
         }
-        openDetail(item.poster)
+        openDetail(catalogItem.poster)
     }
 
     private func openWatch(_ item: WatchItem) {
