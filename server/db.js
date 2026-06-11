@@ -251,5 +251,6 @@ db.exec(`
 
 module.exports = db;
 
-const { migrateUserDataToProfiles } = require('./services/profiles');
+const { migrateUserDataToProfiles, dedupeMigratedProfileData } = require('./services/profiles');
 migrateUserDataToProfiles();
+dedupeMigratedProfileData();

@@ -74,7 +74,13 @@ public class TvLoginActivity extends AppCompatActivity {
             }
             runOnUiThread(() -> {
                 if (isFinishing()) return;
-                startActivity(new Intent(TvLoginActivity.this, TvShellActivity.class));
+                Intent next;
+                if (result.needsProfilePick || NativeAuth.needsProfileSelection(app)) {
+                    next = new Intent(TvLoginActivity.this, TvProfilePickerActivity.class);
+                } else {
+                    next = new Intent(TvLoginActivity.this, TvShellActivity.class);
+                }
+                startActivity(next);
                 finish();
             });
         });

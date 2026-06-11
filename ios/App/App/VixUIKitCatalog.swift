@@ -488,7 +488,7 @@ final class UIKitHomeViewController: UIViewController {
     private func startHeroTimer() {
         heroTimer?.invalidate()
         guard heroSlides.count > 1 else { return }
-        heroTimer = Timer.scheduledTimer(withTimeInterval: 8, repeats: true) { [weak self] _ in
+        heroTimer = Timer.scheduledTimer(withTimeInterval: 32, repeats: true) { [weak self] _ in
             self?.heroView.advance()
         }
     }
@@ -563,11 +563,14 @@ final class VixHeroCarouselView: UIView {
     private let imageView = UIImageView()
     private let titleLabel = UILabel()
     private let dotsStack = UIStackView()
+    private let muteButton = UIButton(type: .system)
     private let gradient = CAGradientLayer()
     private var player: AVPlayer?
     private var playerLayer: AVPlayerLayer?
+    private var endObserver: NSObjectProtocol?
     private var slides: [HeroSlide] = []
     private var index = 0
+    private var isMuted = true
     private weak var api: VixAPI?
 
     override init(frame: CGRect) {
@@ -582,6 +585,15 @@ final class VixHeroCarouselView: UIView {
         gradient.colors = [UIColor.clear.cgColor, UIColor.black.withAlphaComponent(0.85).cgColor]
         gradient.locations = [0.45, 1]
         layer.addSublayer(gradient)
+
+        muteButton.tintColor = .white
+        muteButton.backgroundColor = UIColor.black.withAlphaComponent(0.45)
+        muteButton.layer.cornerRadius = 18
+        muteButton.translatesAutoresizingMaskIntoConstraints = false
+        muteButton.isHidden = true
+        muteButton.addTarget(self, action: #selector(toggleMute), for: .touchUpInside)
+        updateMuteIcon()
+        addSubview(muteButton)
 
         titleLabel.font = .boldSystemFont(ofSize: 26)
         titleLabel.textColor = .white
@@ -600,6 +612,10 @@ final class VixHeroCarouselView: UIView {
             imageView.leadingAnchor.constraint(equalTo: leadingAnchor),
             imageView.trailingAnchor.constraint(equalTo: trailingAnchor),
             imageView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            muteButton.topAnchor.constraint(equalTo: topAnchor, constant: 12),
+            muteButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+            muteButton.widthAnchor.constraint(equalToConstant: 36),
+            muteButton.heightAnchor.constraint(equalToConstant: 36),
             titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
             titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
             titleLabel.bottomAnchor.constraint(equalTo: dotsStack.topAnchor, constant: -10),
@@ -683,10 +699,11 @@ final class VixHeroCarouselView: UIView {
         try? AVAudioSession.sharedInstance().setActive(true)
         let item = AVPlayerItem(url: url)
         let p = AVPlayer(playerItem: item)
-        p.isMuted = false
-        p.volume = 1
+        p.isMuted = isMuted
+        p.volume = isMuted ? 0 : 1
         p.actionAtItemEnd = .none
-        NotificationCenter.default.addObserver(
+        if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
+        endObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main
         ) { [weak p] _ in p?.seek(to: .zero); p?.play() }
         let layer = AVPlayerLayer(player: p)
@@ -695,14 +712,31 @@ final class VixHeroCarouselView: UIView {
         self.layer.insertSublayer(layer, above: imageView.layer)
         playerLayer = layer
         player = p
+        muteButton.isHidden = false
+        bringSubviewToFront(muteButton)
         p.play()
     }
 
+    @objc private func toggleMute() {
+        isMuted.toggle()
+        player?.isMuted = isMuted
+        player?.volume = isMuted ? 0 : 1
+        updateMuteIcon()
+    }
+
+    private func updateMuteIcon() {
+        let icon = isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill"
+        muteButton.setImage(UIImage(systemName: icon), for: .normal)
+    }
+
     private func stopPlayer() {
+        if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
+        endObserver = nil
         player?.pause()
         player = nil
         playerLayer?.removeFromSuperlayer()
         playerLayer = nil
+        muteButton.isHidden = true
     }
 }
 

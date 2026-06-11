@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const db = require('../db');
+const { getSetting, setSetting } = require('./settings');
 
 const PROFILE_COLORS = ['#e50914', '#1e88e5', '#43a047', '#fb8c00', '#8e24aa', '#00acc1', '#f06292'];
 
@@ -108,7 +109,10 @@ function setLastProfile(userId, profileId) {
 
 function migrateUserDataToProfiles() {
   const whCols = db.prepare('PRAGMA table_info(watch_history)').all();
-  if (whCols.some((c) => c.name === 'profile_id')) return;
+  if (whCols.some((c) => c.name === 'profile_id')) {
+    dedupeMigratedProfileData();
+    return;
+  }
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS profiles (
@@ -170,6 +174,54 @@ function migrateUserDataToProfiles() {
       ALTER TABLE user_library_new RENAME TO user_library;
     `);
   }
+
+  dedupeMigratedProfileData();
+}
+
+/** Quita historial/favoritos duplicados por la migración user_id → todos los perfiles. */
+function dedupeMigratedProfileData() {
+  if (getSetting('profile_data_deduped_v1')) return;
+
+  const multiUsers = db.prepare(`
+    SELECT user_id FROM profiles GROUP BY user_id HAVING COUNT(*) > 1
+  `).all();
+
+  const delWatchDup = db.prepare(`
+    DELETE FROM watch_history
+    WHERE profile_id = ?
+      AND EXISTS (
+        SELECT 1 FROM watch_history k
+        WHERE k.profile_id = ?
+          AND k.content_type = watch_history.content_type
+          AND k.content_id = watch_history.content_id
+          AND k.progress = watch_history.progress
+          AND k.duration = watch_history.duration
+      )
+  `);
+
+  const delLibDup = db.prepare(`
+    DELETE FROM user_library
+    WHERE profile_id = ?
+      AND EXISTS (
+        SELECT 1 FROM user_library k
+        WHERE k.profile_id = ?
+          AND k.content_type = user_library.content_type
+          AND k.content_id = user_library.content_id
+          AND k.list_type = user_library.list_type
+      )
+  `);
+
+  for (const { user_id } of multiUsers) {
+    const profs = db.prepare('SELECT id FROM profiles WHERE user_id = ? ORDER BY id').all(user_id);
+    const keepId = profs[0]?.id;
+    if (!keepId) continue;
+    for (let i = 1; i < profs.length; i++) {
+      delWatchDup.run(profs[i].id, keepId);
+      delLibDup.run(profs[i].id, keepId);
+    }
+  }
+
+  setSetting('profile_data_deduped_v1', '1');
 }
 
 module.exports = {
@@ -187,5 +239,6 @@ module.exports = {
   updateProfile,
   deleteProfile,
   setLastProfile,
-  migrateUserDataToProfiles
+  migrateUserDataToProfiles,
+  dedupeMigratedProfileData
 };

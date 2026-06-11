@@ -53,6 +53,12 @@
             android:theme="@style/Theme.VixTV.Fullscreen" />
 
         <activity
+            android:name=".TvProfilePickerActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.VixTV.Fullscreen" />
+
+        <activity
             android:name=".TvShellActivity"
             android:exported="false"
             android:launchMode="singleTask"

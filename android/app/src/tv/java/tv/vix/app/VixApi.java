@@ -49,6 +49,17 @@ public final class VixApi {
         return postJson("/api/profiles/setup", body);
     }
 
+    public JSONArray listProfiles() throws Exception {
+        return getJsonArray("/api/profiles");
+    }
+
+    public JSONObject selectProfile(int profileId, String pin) throws Exception {
+        JSONObject body = new JSONObject();
+        body.put("profileId", profileId);
+        if (pin != null && !pin.isEmpty()) body.put("pin", pin);
+        return postJson("/api/profiles/select", body);
+    }
+
     public JSONObject me() throws Exception {
         return getJson("/api/auth/me");
     }

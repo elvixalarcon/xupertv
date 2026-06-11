@@ -3004,6 +3004,7 @@ async function selectProfile(profileId, pin = '') {
       can_series: data.user.can_series
     };
     persistAuthToken(token);
+    await refreshWatchProgress();
     await finishAppBoot();
   } catch (err) {
     if (err.needs_pin || err.message?.includes('PIN')) {
@@ -3430,6 +3431,8 @@ function logout() {
   token = null;
   currentUser = null;
   currentProfile = null;
+  continueWatchingCache = {};
+  watchProgressMap = {};
   window.__vixBootAttempted = false;
   persistAuthToken(null);
   showScreen('login-screen');

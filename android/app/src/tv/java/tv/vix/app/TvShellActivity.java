@@ -155,6 +155,11 @@ public class TvShellActivity extends AppCompatActivity {
             finish();
             return;
         }
+        if (NativeAuth.needsProfileSelection(this)) {
+            startActivity(new Intent(this, TvProfilePickerActivity.class));
+            finish();
+            return;
+        }
         setContentView(R.layout.activity_tv_shell);
         serverBase = ServerUrlHelper.fromPrefs(getSharedPreferences(AppConstants.PREFS, MODE_PRIVATE));
         authToken = NativeAuth.getToken(this);

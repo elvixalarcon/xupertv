@@ -12,7 +12,10 @@ public class TvLauncherActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         ServerUrlHelper.ensureDefault(getSharedPreferences(AppConstants.PREFS, MODE_PRIVATE));
         if (NativeAuth.hasToken(this)) {
-            startActivity(new Intent(this, TvShellActivity.class));
+            Intent next = NativeAuth.needsProfileSelection(this)
+                ? new Intent(this, TvProfilePickerActivity.class)
+                : new Intent(this, TvShellActivity.class);
+            startActivity(next);
         } else {
             startActivity(new Intent(this, TvLoginActivity.class));
         }

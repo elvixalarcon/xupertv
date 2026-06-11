@@ -5,6 +5,8 @@ import android.content.SharedPreferences;
 
 import org.json.JSONObject;
 
+import android.util.Base64;
+
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -49,6 +51,28 @@ public final class NativeAuth {
     public static String getToken(Context context) {
         String t = prefs(context).getString(KEY_AUTH_TOKEN, "");
         return t == null ? "" : t;
+    }
+
+    /** true si el JWT no incluye profileId (cuenta multi-perfil sin elegir). */
+    public static boolean needsProfileSelection(Context context) {
+        String token = getToken(context);
+        if (token.isEmpty()) return false;
+        Integer pid = profileIdFromToken(token);
+        return pid == null || pid <= 0;
+    }
+
+    public static Integer profileIdFromToken(String token) {
+        try {
+            String[] parts = token.split("\\.");
+            if (parts.length < 2) return null;
+            byte[] decoded = Base64.decode(parts[1], Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING);
+            JSONObject json = new JSONObject(new String(decoded, StandardCharsets.UTF_8));
+            if (!json.has("profileId") || json.isNull("profileId")) return null;
+            int id = json.optInt("profileId", 0);
+            return id > 0 ? id : null;
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private static SharedPreferences prefs(Context context) {

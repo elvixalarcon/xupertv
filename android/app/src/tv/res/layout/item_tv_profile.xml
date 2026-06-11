@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="160dp"
+    android:layout_height="wrap_content"
+    android:layout_margin="16dp"
+    android:background="@drawable/tv_poster_selector"
+    android:focusable="true"
+    android:gravity="center_horizontal"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:id="@+id/tv_profile_avatar"
+        android:layout_width="88dp"
+        android:layout_height="88dp"
+        android:background="@color/tv_card"
+        android:gravity="center"
+        android:textColor="@color/tv_text"
+        android:textSize="36sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/tv_profile_name"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="@color/tv_text"
+        android:textSize="16sp" />
+
+    <TextView
+        android:id="@+id/tv_profile_kids"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="Kids"
+        android:textColor="@color/tv_gold"
+        android:textSize="12sp"
+        android:visibility="gone" />
+</LinearLayout>

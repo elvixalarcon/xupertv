@@ -57,7 +57,9 @@ public class TvAccountActivity extends AppCompatActivity {
             startActivity(new Intent(this, TvLoginActivity.class));
             finishAffinity();
         });
-        switchAcc.setOnClickListener(v -> logout.performClick());
+        switchAcc.setOnClickListener(v ->
+            startActivity(new Intent(this, TvProfilePickerActivity.class)
+                .putExtra(TvProfilePickerActivity.EXTRA_FROM_SWITCH, true)));
 
         loading.setVisibility(View.VISIBLE);
         Executors.newSingleThreadExecutor().execute(() -> {
