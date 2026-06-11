@@ -274,8 +274,12 @@ struct LibraryStatus: Decodable {
 // MARK: - Play URLs
 
 enum PlayUrls {
-    static func live(server: String, token: String, channelId: Int) -> URL? {
+    static func live(server: String, token: String, channelId: Int, hd: Bool = true) -> URL? {
         let enc = token.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? token
+        // Sin profile=mobile: el servidor elige la variante HLS de mayor calidad (Full HD).
+        if hd {
+            return URL(string: "\(server)/api/live/ch/\(channelId)/play.m3u8?token=\(enc)")
+        }
         return URL(string: "\(server)/api/live/ch/\(channelId)/play.m3u8?token=\(enc)&profile=mobile")
     }
 

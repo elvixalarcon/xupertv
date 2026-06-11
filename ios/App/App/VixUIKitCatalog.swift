@@ -91,7 +91,13 @@ enum VixUIKitPlayer {
         activateAudioSession()
         player?.pause()
         player?.replaceCurrentItem(with: nil)
-        let item = AVPlayerItem(url: url)
+        let token = AuthSession.shared.api.token
+        let item = playerItem(for: url, token: token)
+        item.preferredPeakBitRate = 0
+        if #available(iOS 10.0, *) {
+            item.preferredForwardBufferDuration = 8
+        }
+        playerVC.videoGravity = .resizeAspect
         if let existing = player {
             existing.replaceCurrentItem(with: item)
             playerVC.player = existing
@@ -99,6 +105,7 @@ enum VixUIKitPlayer {
         } else {
             let p = AVPlayer(playerItem: item)
             p.automaticallyWaitsToMinimizeStalling = true
+            p.appliesMediaSelectionCriteriaAutomatically = true
             player = p
             playerVC.player = p
             p.play()
@@ -1097,9 +1104,59 @@ final class VixChannelCell: UITableViewCell {
 
 // MARK: - Search & detail
 
+final class VixSearchResultCell: UITableViewCell {
+    static let reuseId = "searchResult"
+    private let poster = UIImageView()
+    private let titleLabel = UILabel()
+    private let typeLabel = UILabel()
+
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        backgroundColor = .clear
+        selectionStyle = .none
+        poster.contentMode = .scaleAspectFill
+        poster.clipsToBounds = true
+        poster.layer.cornerRadius = 8
+        poster.backgroundColor = VixUITheme.card
+        poster.translatesAutoresizingMaskIntoConstraints = false
+        titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
+        titleLabel.textColor = .white
+        titleLabel.numberOfLines = 2
+        typeLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        typeLabel.textColor = VixUITheme.muted
+        let text = UIStackView(arrangedSubviews: [titleLabel, typeLabel])
+        text.axis = .vertical
+        text.spacing = 4
+        text.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(poster)
+        contentView.addSubview(text)
+        NSLayoutConstraint.activate([
+            poster.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            poster.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
+            poster.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
+            poster.widthAnchor.constraint(equalToConstant: 56),
+            poster.heightAnchor.constraint(equalToConstant: 84),
+            text.leadingAnchor.constraint(equalTo: poster.trailingAnchor, constant: 12),
+            text.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            text.centerYAnchor.constraint(equalTo: poster.centerYAnchor)
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    func configure(item: SearchItem) {
+        titleLabel.text = item.title
+        typeLabel.text = item.mediaType == "series" ? "Serie" : "Película"
+        VixImageLoader.load(PlayUrls.poster(item.poster), into: poster,
+                            placeholder: UIImage(systemName: item.mediaType == "series" ? "tv" : "film"))
+    }
+}
+
 final class UIKitSearchViewController: UIViewController, UITableViewDataSource, UITableViewDelegate {
     private let query: String
     private let table = UITableView(frame: .zero, style: .plain)
+    private let spinner = UIActivityIndicatorView(style: .large)
+    private let emptyLabel = UILabel()
     private var items: [SearchItem] = []
 
     init(query: String) {
@@ -1111,26 +1168,44 @@ final class UIKitSearchViewController: UIViewController, UITableViewDataSource, 
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "Buscar"
+        title = "« \(query) »"
         view.backgroundColor = VixUITheme.bg
         navigationController?.setNavigationBarHidden(false, animated: false)
         table.backgroundColor = .clear
+        table.separatorColor = UIColor.white.withAlphaComponent(0.08)
+        table.rowHeight = 100
         table.dataSource = self
         table.delegate = self
-        table.register(VixChannelCell.self, forCellReuseIdentifier: "s")
+        table.register(VixSearchResultCell.self, forCellReuseIdentifier: VixSearchResultCell.reuseId)
         table.translatesAutoresizingMaskIntoConstraints = false
+        spinner.color = VixUITheme.accent
+        spinner.translatesAutoresizingMaskIntoConstraints = false
+        emptyLabel.text = "Sin resultados"
+        emptyLabel.textColor = VixUITheme.muted
+        emptyLabel.textAlignment = .center
+        emptyLabel.isHidden = true
+        emptyLabel.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(table)
+        view.addSubview(spinner)
+        view.addSubview(emptyLabel)
         NSLayoutConstraint.activate([
             table.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             table.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             table.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            table.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            table.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            spinner.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            spinner.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            emptyLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            emptyLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
+        spinner.startAnimating()
         Task {
             let res = try? await AuthSession.shared.api.search(query: query)
             let merged = (res?.movies ?? []) + (res?.series ?? [])
             await MainActor.run {
                 self.items = merged
+                self.spinner.stopAnimating()
+                self.emptyLabel.isHidden = !merged.isEmpty
                 self.table.reloadData()
             }
         }
@@ -1139,24 +1214,19 @@ final class UIKitSearchViewController: UIViewController, UITableViewDataSource, 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { items.count }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "s", for: indexPath)
-        let item = items[indexPath.row]
-        cell.textLabel?.text = item.title
-        cell.textLabel?.textColor = .white
-        cell.backgroundColor = .clear
+        let cell = tableView.dequeueReusableCell(withIdentifier: VixSearchResultCell.reuseId, for: indexPath) as! VixSearchResultCell
+        cell.configure(item: items[indexPath.row])
         return cell
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         let item = items[indexPath.row]
-        let poster = CatalogPoster(id: item.id, title: item.title, poster: item.poster, content_type: item.mediaType)
         if item.mediaType == "series" {
             navigationController?.pushViewController(UIKitSeriesDetailViewController(seriesId: item.id), animated: true)
         } else {
             navigationController?.pushViewController(UIKitMovieDetailViewController(movieId: item.id), animated: true)
         }
-        _ = poster
     }
 }
 
