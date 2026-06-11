@@ -23,7 +23,7 @@ BUILD_DIR="$IOS_APP/build"
 rm -rf "$BUILD_DIR" Payload "$OUT_DIR/$IPA_NAME"
 
 echo "==> Xcode: $(xcodebuild -version | tr '\n' ' ')"
-echo "==> xcodebuild (SwiftUI nativo, sin Capacitor, iOS 17 SDK)"
+echo "==> xcodebuild (SwiftUI nativo, sin Capacitor, weak SwiftUICore para iOS 17)"
 xcodebuild \
   -project "$PROJECT" \
   -scheme "$SCHEME" \

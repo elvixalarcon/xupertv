@@ -1,5 +1,5 @@
 # Compila IPA nativo SwiftUI sin firmar (GitHub Actions macOS).
-# Xcode 15 + iOS 17 SDK: evita enlace a SwiftUICore (solo existe en iOS 18+).
+# Xcode 16 + weak_framework SwiftUICore: compatible con iOS 17 (framework solo en iOS 18+).
 name: iOS IPA (unsigned)
 
 on:
@@ -12,14 +12,9 @@ on:
 
 jobs:
   build-ipa:
-    runs-on: macos-14
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Select Xcode 15.4 (iOS 17 SDK)
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: '15.4'
 
       - name: Build unsigned IPA
         run: |
@@ -27,14 +22,19 @@ jobs:
           chmod +x ios/build-ipa-unsigned.sh
           ios/build-ipa-unsigned.sh
 
-      - name: Verify iOS 17 compatible (no SwiftUICore)
+      - name: Verify SwiftUICore is weak-linked (iOS 17 OK)
         run: |
           unzip -q data/ipa/VixTV.ipa -d /tmp/vix-ipa-check
-          if strings /tmp/vix-ipa-check/Payload/App.app/App | grep -q 'SwiftUICore.framework/SwiftUICore'; then
-            echo "ERROR: Binary links SwiftUICore (missing on iOS 17) — build must use Xcode 15"
+          BIN=/tmp/vix-ipa-check/Payload/App.app/App
+          otool -L "$BIN" | tee /tmp/vix-otool.txt
+          if otool -l "$BIN" | grep -A3 LC_LOAD_WEAK_DYLIB | grep -q SwiftUICore; then
+            echo "OK: SwiftUICore weak-linked"
+          elif ! strings "$BIN" | grep -q 'SwiftUICore.framework/SwiftUICore'; then
+            echo "OK: no SwiftUICore reference"
+          else
+            echo "ERROR: SwiftUICore appears strongly linked — will crash on iOS 17"
             exit 1
           fi
-          echo "OK: no SwiftUICore dependency"
           ls -lh data/ipa/VixTV.ipa
 
       - name: Upload IPA artifact
