@@ -69,6 +69,12 @@ struct CatalogSection: Identifiable, Decodable {
     let id: String
     let title: String
     let items: [CatalogPoster]
+
+    init(id: String, title: String, items: [CatalogPoster]) {
+        self.id = id
+        self.title = title
+        self.items = items
+    }
 }
 
 struct CatalogHome: Decodable {
@@ -375,6 +381,36 @@ final class VixAPI {
     func catalogHero() async throws -> [HeroSlide] {
         let data = try await request(path: "/api/catalog/hero")
         return try JSONDecoder().decode([HeroSlide].self, from: data)
+    }
+
+    func catalogMovies() async throws -> [CatalogSection] {
+        let data = try await request(path: "/api/catalog/movies")
+        return Self.decodeGenreRows(data, contentType: "movie", listKey: "movies")
+    }
+
+    func catalogSeries() async throws -> [CatalogSection] {
+        let data = try await request(path: "/api/catalog/series")
+        return Self.decodeGenreRows(data, contentType: "series", listKey: "series")
+    }
+
+    func catalogCategories() async throws -> [CatalogSection] {
+        let data = try await request(path: "/api/catalog/categories")
+        let home = try JSONDecoder().decode(CatalogHome.self, from: data)
+        return home.sections ?? []
+    }
+
+    private static func decodeGenreRows(_ data: Data, contentType: String, listKey: String) -> [CatalogSection] {
+        guard let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
+        return arr.compactMap { row in
+            let genre = (row["genre"] as? String) ?? "Otros"
+            let raw = (row[listKey] as? [[String: Any]]) ?? []
+            let items: [CatalogPoster] = raw.compactMap { d in
+                guard let id = d["id"] as? Int, let title = d["title"] as? String else { return nil }
+                return CatalogPoster(id: id, title: title, poster: d["poster"] as? String, content_type: contentType)
+            }
+            guard !items.isEmpty else { return nil }
+            return CatalogSection(id: "\(contentType)-\(genre)", title: genre, items: items)
+        }
     }
 
     func trailerPlayURL(youtubeKey: String) async throws -> URL {

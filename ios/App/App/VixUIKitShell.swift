@@ -44,93 +44,147 @@ enum VixAppRouter {
     }
 }
 
+/// Detiene reproducción en vivo al cambiar de pestaña.
+enum VixLivePlayback {
+    static weak var current: UIKitLiveViewController?
+    static func stopAll() { current?.stopPlayback() }
+}
+
 // MARK: - Login
 
 final class UIKitLoginViewController: UIViewController {
-    private let serverField = UITextField()
     private let userField = UITextField()
     private let passField = UITextField()
     private let errorLabel = UILabel()
     private let loginButton = UIButton(type: .system)
     private let spinner = UIActivityIndicatorView(style: .medium)
+    private let gradientLayer = CAGradientLayer()
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "Vix TV"
-        view.backgroundColor = .black
-        navigationController?.navigationBar.barStyle = .black
-        navigationController?.navigationBar.titleTextAttributes = [.foregroundColor: UIColor.white]
+        navigationController?.setNavigationBarHidden(true, animated: false)
+        VixConfig.saveServer(VixConfig.defaultServer)
 
-        let titleLabel = UILabel()
-        titleLabel.text = "App nativa · AVPlayer"
-        titleLabel.textColor = .secondaryLabel
-        titleLabel.font = .preferredFont(forTextStyle: .subheadline)
-        titleLabel.textAlignment = .center
+        gradientLayer.colors = [
+            UIColor(red: 0.08, green: 0.05, blue: 0.02, alpha: 1).cgColor,
+            UIColor(red: 0.04, green: 0.04, blue: 0.06, alpha: 1).cgColor,
+            UIColor.black.cgColor
+        ]
+        gradientLayer.locations = [0, 0.45, 1]
+        view.layer.insertSublayer(gradientLayer, at: 0)
 
-        styleField(serverField, placeholder: "https://tv.vixred.com", text: VixConfig.serverURL)
-        styleField(userField, placeholder: "Usuario")
-        styleField(passField, placeholder: "Contraseña", secure: true)
+        let card = UIView()
+        card.backgroundColor = UIColor(white: 1, alpha: 0.06)
+        card.layer.cornerRadius = 20
+        card.layer.borderWidth = 1
+        card.layer.borderColor = UIColor(white: 1, alpha: 0.1).cgColor
+        card.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(card)
 
-        errorLabel.textColor = .systemRed
-        errorLabel.font = .preferredFont(forTextStyle: .footnote)
+        let icon = UIImageView(image: UIImage(systemName: "play.tv.fill"))
+        icon.tintColor = VixUITheme.accent
+        icon.contentMode = .scaleAspectFit
+        icon.translatesAutoresizingMaskIntoConstraints = false
+
+        let brand = UILabel()
+        brand.text = "Vix TV"
+        brand.font = .boldSystemFont(ofSize: 34)
+        brand.textColor = .white
+        brand.textAlignment = .center
+
+        let subtitle = UILabel()
+        subtitle.text = "Películas · Series · TV en vivo"
+        subtitle.font = .systemFont(ofSize: 15, weight: .medium)
+        subtitle.textColor = VixUITheme.muted
+        subtitle.textAlignment = .center
+
+        styleField(userField, placeholder: "Usuario", icon: "person.fill")
+        styleField(passField, placeholder: "Contraseña", icon: "lock.fill", secure: true)
+
+        errorLabel.textColor = UIColor(red: 1, green: 0.45, blue: 0.45, alpha: 1)
+        errorLabel.font = .systemFont(ofSize: 13)
         errorLabel.numberOfLines = 0
         errorLabel.textAlignment = .center
 
-        loginButton.setTitle("Iniciar sesión", for: .normal)
-        loginButton.titleLabel?.font = .boldSystemFont(ofSize: 17)
-        loginButton.backgroundColor = .systemRed
-        loginButton.setTitleColor(.white, for: .normal)
-        loginButton.layer.cornerRadius = 10
+        loginButton.setTitle("Entrar", for: .normal)
+        loginButton.titleLabel?.font = .boldSystemFont(ofSize: 18)
+        loginButton.backgroundColor = VixUITheme.accent
+        loginButton.setTitleColor(.black, for: .normal)
+        loginButton.layer.cornerRadius = 14
         loginButton.addTarget(self, action: #selector(doLogin), for: .touchUpInside)
-
+        spinner.color = .black
         spinner.hidesWhenStopped = true
 
         let stack = UIStackView(arrangedSubviews: [
-            titleLabel, labeled("Servidor", serverField), labeled("Usuario", userField),
-            labeled("Contraseña", passField), errorLabel, loginButton
+            icon, brand, subtitle, userField, passField, errorLabel, loginButton
         ])
         stack.axis = .vertical
-        stack.spacing = 14
+        stack.spacing = 16
+        stack.setCustomSpacing(8, after: brand)
+        stack.setCustomSpacing(28, after: subtitle)
         stack.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(stack)
+        card.addSubview(stack)
         view.addSubview(spinner)
-        spinner.translatesAutoresizingMaskIntoConstraints = false
 
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 24),
-            stack.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -24),
-            stack.centerYAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerYAnchor),
-            loginButton.heightAnchor.constraint(equalToConstant: 48),
+            card.centerYAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerYAnchor),
+            card.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 28),
+            card.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -28),
+            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 28),
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 22),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -22),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -28),
+            icon.heightAnchor.constraint(equalToConstant: 52),
+            userField.heightAnchor.constraint(equalToConstant: 50),
+            passField.heightAnchor.constraint(equalToConstant: 50),
+            loginButton.heightAnchor.constraint(equalToConstant: 52),
             spinner.centerXAnchor.constraint(equalTo: loginButton.centerXAnchor),
             spinner.centerYAnchor.constraint(equalTo: loginButton.centerYAnchor)
         ])
+
+        userField.delegate = self
+        passField.delegate = self
     }
 
-    private func styleField(_ field: UITextField, placeholder: String, text: String? = nil, secure: Bool = false) {
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        gradientLayer.frame = view.bounds
+    }
+
+    private func styleField(_ field: UITextField, placeholder: String, icon: String, secure: Bool = false) {
         field.placeholder = placeholder
-        field.text = text
-        field.borderStyle = .roundedRect
+        field.textColor = .white
+        field.backgroundColor = UIColor(white: 0, alpha: 0.35)
+        field.layer.cornerRadius = 12
+        field.layer.borderWidth = 1
+        field.layer.borderColor = UIColor(white: 1, alpha: 0.12).cgColor
         field.autocapitalizationType = .none
         field.autocorrectionType = .no
         field.isSecureTextEntry = secure
-        field.backgroundColor = UIColor(white: 0.12, alpha: 1)
-        field.textColor = .white
+        field.leftView = fieldIcon(icon)
+        field.leftViewMode = .always
+        field.attributedPlaceholder = NSAttributedString(
+            string: placeholder,
+            attributes: [.foregroundColor: UIColor(white: 0.55, alpha: 1)]
+        )
     }
 
-    private func labeled(_ title: String, _ field: UIView) -> UIStackView {
-        let cap = UILabel()
-        cap.text = title
-        cap.font = .preferredFont(forTextStyle: .caption1)
-        cap.textColor = .secondaryLabel
-        return UIStackView(arrangedSubviews: [cap, field])
+    private func fieldIcon(_ name: String) -> UIView {
+        let wrap = UIView(frame: CGRect(x: 0, y: 0, width: 44, height: 50))
+        let iv = UIImageView(image: UIImage(systemName: name))
+        iv.tintColor = VixUITheme.muted
+        iv.frame = CGRect(x: 14, y: 13, width: 22, height: 22)
+        wrap.addSubview(iv)
+        return wrap
     }
 
     @objc private func doLogin() {
         errorLabel.text = ""
-        guard let user = userField.text, !user.isEmpty,
-              let pass = passField.text, !pass.isEmpty else { return }
-        let server = serverField.text ?? VixConfig.serverURL
-        VixConfig.saveServer(server)
+        guard let user = userField.text?.trimmingCharacters(in: .whitespacesAndNewlines), !user.isEmpty,
+              let pass = passField.text, !pass.isEmpty else {
+            errorLabel.text = "Ingresa usuario y contraseña"
+            return
+        }
         setLoading(true)
         Task {
             do {
@@ -139,8 +193,7 @@ final class UIKitLoginViewController: UIViewController {
                     self.setLoading(false)
                     AuthSession.shared.applyLogin(result)
                     if result.needsProfilePick {
-                        let pick = UIKitProfilePickerViewController()
-                        self.navigationController?.setViewControllers([pick], animated: true)
+                        self.navigationController?.setViewControllers([UIKitProfilePickerViewController()], animated: true)
                     } else {
                         VixAppRouter.showMain(from: self.navigationController)
                     }
@@ -156,8 +209,16 @@ final class UIKitLoginViewController: UIViewController {
 
     private func setLoading(_ on: Bool) {
         loginButton.isEnabled = !on
-        loginButton.setTitle(on ? "" : "Iniciar sesión", for: .normal)
+        loginButton.setTitle(on ? "" : "Entrar", for: .normal)
         on ? spinner.startAnimating() : spinner.stopAnimating()
+    }
+}
+
+extension UIKitLoginViewController: UITextFieldDelegate {
+    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+        if textField === userField { passField.becomeFirstResponder() }
+        else { textField.resignFirstResponder(); doLogin() }
+        return true
     }
 }
 
@@ -170,11 +231,11 @@ final class UIKitProfilePickerViewController: UIViewController, UITableViewDataS
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Elige perfil"
-        view.backgroundColor = .black
+        view.backgroundColor = VixUITheme.bg
         profiles = AuthSession.shared.profiles
         table.dataSource = self
         table.delegate = self
-        table.backgroundColor = .black
+        table.backgroundColor = .clear
         table.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(table)
         NSLayoutConstraint.activate([
@@ -192,7 +253,7 @@ final class UIKitProfilePickerViewController: UIViewController, UITableViewDataS
         let p = profiles[indexPath.row]
         cell.textLabel?.text = p.name
         cell.detailTextLabel?.text = p.is_kids ? "Kids" : nil
-        cell.backgroundColor = UIColor(white: 0.1, alpha: 1)
+        cell.backgroundColor = VixUITheme.card
         cell.textLabel?.textColor = .white
         return cell
     }
@@ -200,11 +261,8 @@ final class UIKitProfilePickerViewController: UIViewController, UITableViewDataS
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         let profile = profiles[indexPath.row]
-        if profile.is_kids {
-            promptPin(for: profile)
-        } else {
-            select(profile: profile, pin: nil)
-        }
+        if profile.is_kids { promptPin(for: profile) }
+        else { select(profile: profile, pin: nil) }
     }
 
     private func promptPin(for profile: UserProfile) {
@@ -235,9 +293,10 @@ final class UIKitProfilePickerViewController: UIViewController, UITableViewDataS
 
 // MARK: - Tabs
 
-final class UIKitMainTabController: UITabBarController {
+final class UIKitMainTabController: UITabBarController, UITabBarControllerDelegate {
     override func viewDidLoad() {
         super.viewDidLoad()
+        delegate = self
         tabBar.barStyle = .black
         tabBar.tintColor = VixUITheme.accent
         tabBar.unselectedItemTintColor = VixUITheme.muted
@@ -245,12 +304,17 @@ final class UIKitMainTabController: UITabBarController {
         viewControllers = [
             wrap(UIKitHomeViewController(), title: "Inicio", icon: "house.fill"),
             wrap(UIKitLiveViewController(), title: "En vivo", icon: "dot.radiowaves.left.and.right"),
-            wrap(UIKitSettingsViewController(), title: "Cuenta", icon: "person.fill")
+            wrap(UIKitProfileViewController(), title: "Perfil", icon: "person.fill")
         ]
     }
 
+    func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
+        if !(viewController.children.first is UIKitLiveViewController) {
+            VixLivePlayback.stopAll()
+        }
+    }
+
     private func wrap(_ vc: UIViewController, title: String, icon: String) -> UINavigationController {
-        vc.title = title
         let nav = UINavigationController(rootViewController: vc)
         nav.tabBarItem = UITabBarItem(title: title, image: UIImage(systemName: icon), tag: 0)
         nav.navigationBar.barStyle = .black
@@ -259,31 +323,229 @@ final class UIKitMainTabController: UITabBarController {
     }
 }
 
-// MARK: - Settings
+// MARK: - Perfil (favoritos + historial)
 
-final class UIKitSettingsViewController: UIViewController {
+final class UIKitProfileViewController: UIViewController {
+    private let segmented = UISegmentedControl(items: ["Favoritos", "Historial", "Continuar"])
+    private let table = UITableView(frame: .zero, style: .plain)
+    private var favorites: [LibraryItem] = []
+    private var history: [WatchItem] = []
+    private var cont: [WatchItem] = []
+    private let spinner = UIActivityIndicatorView(style: .large)
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .black
-        let logoutButton = UIButton(type: .system)
-        logoutButton.setTitle("Cerrar sesión", for: .normal)
-        logoutButton.setTitleColor(.systemRed, for: .normal)
-        logoutButton.addTarget(self, action: #selector(doLogout), for: .touchUpInside)
-        logoutButton.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(logoutButton)
-        NSLayoutConstraint.activate([
-            logoutButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            logoutButton.centerYAnchor.constraint(equalTo: view.centerYAnchor)
-        ])
+        view.backgroundColor = VixUITheme.bg
+        navigationController?.setNavigationBarHidden(true, animated: false)
+
+        let title = UILabel()
+        title.text = "Perfil"
+        title.font = .boldSystemFont(ofSize: 28)
+        title.textColor = .white
+
+        let headerStack = UIStackView(arrangedSubviews: [title])
+        headerStack.axis = .vertical
+        headerStack.spacing = 4
+        headerStack.alignment = .leading
         if let p = AuthSession.shared.currentProfile {
-            navigationItem.prompt = "Perfil: \(p.name)"
+            let sub = UILabel()
+            sub.text = p.name
+            sub.font = .systemFont(ofSize: 15)
+            sub.textColor = VixUITheme.muted
+            headerStack.addArrangedSubview(sub)
+        }
+        headerStack.translatesAutoresizingMaskIntoConstraints = false
+
+        segmented.selectedSegmentIndex = 0
+        segmented.selectedSegmentTintColor = VixUITheme.accent
+        segmented.setTitleTextAttributes([.foregroundColor: UIColor.black], for: .selected)
+        segmented.setTitleTextAttributes([.foregroundColor: UIColor.white], for: .normal)
+        segmented.backgroundColor = VixUITheme.card
+        segmented.addTarget(self, action: #selector(tabChanged), for: .valueChanged)
+        segmented.translatesAutoresizingMaskIntoConstraints = false
+
+        table.backgroundColor = .clear
+        table.separatorColor = UIColor.white.withAlphaComponent(0.08)
+        table.dataSource = self
+        table.delegate = self
+        table.register(UIKitLibraryCell.self, forCellReuseIdentifier: UIKitLibraryCell.reuseId)
+        table.translatesAutoresizingMaskIntoConstraints = false
+
+        let logout = UIButton(type: .system)
+        logout.setTitle("Cerrar sesión", for: .normal)
+        logout.setTitleColor(.systemRed, for: .normal)
+        logout.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
+        logout.addTarget(self, action: #selector(doLogout), for: .touchUpInside)
+        logout.translatesAutoresizingMaskIntoConstraints = false
+
+        spinner.color = VixUITheme.accent
+        spinner.translatesAutoresizingMaskIntoConstraints = false
+
+        view.addSubview(title)
+        view.addSubview(segmented)
+        view.addSubview(table)
+        view.addSubview(logout)
+        view.addSubview(spinner)
+
+        NSLayoutConstraint.activate([
+            title.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
+            title.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            segmented.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 28),
+            segmented.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            segmented.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            table.topAnchor.constraint(equalTo: segmented.bottomAnchor, constant: 12),
+            table.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            table.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            table.bottomAnchor.constraint(equalTo: logout.topAnchor, constant: -8),
+            logout.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -8),
+            logout.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            spinner.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            spinner.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+        ])
+        load()
+    }
+
+    @objc private func tabChanged() { table.reloadData() }
+
+    private func load() {
+        spinner.startAnimating()
+        Task {
+            do {
+                async let fav = AuthSession.shared.api.favorites()
+                async let hist = AuthSession.shared.api.watchHistory()
+                async let c = AuthSession.shared.api.watchContinue()
+                let (f, h, co) = try await (fav, hist, c)
+                await MainActor.run {
+                    self.favorites = f
+                    self.history = h
+                    self.cont = co
+                    self.table.reloadData()
+                    self.spinner.stopAnimating()
+                }
+            } catch {
+                await MainActor.run { self.spinner.stopAnimating() }
+            }
         }
     }
 
     @objc private func doLogout() {
         AuthSession.shared.logout()
-        let nav = UINavigationController(rootViewController: UIKitLoginViewController())
-        view.window?.rootViewController = nav
+        VixLivePlayback.stopAll()
+        view.window?.rootViewController = UINavigationController(rootViewController: UIKitLoginViewController())
         view.window?.makeKeyAndVisible()
+    }
+}
+
+extension UIKitProfileViewController: UITableViewDataSource, UITableViewDelegate {
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        switch segmented.selectedSegmentIndex {
+        case 0: return max(favorites.count, 1)
+        case 1: return max(history.count, 1)
+        default: return max(cont.count, 1)
+        }
+    }
+
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: UIKitLibraryCell.reuseId, for: indexPath) as! UIKitLibraryCell
+        switch segmented.selectedSegmentIndex {
+        case 0:
+            if favorites.isEmpty { cell.setEmpty("Sin favoritos"); return cell }
+            let item = favorites[indexPath.row]
+            cell.configure(title: item.title, poster: item.poster, subtitle: item.isSeries ? "Serie" : "Película")
+        case 1:
+            if history.isEmpty { cell.setEmpty("Sin historial"); return cell }
+            let item = history[indexPath.row]
+            cell.configure(title: item.displayTitle, poster: item.poster, subtitle: item.progress_label)
+        default:
+            if cont.isEmpty { cell.setEmpty("Nada pendiente"); return cell }
+            let item = cont[indexPath.row]
+            cell.configure(title: item.displayTitle, poster: item.poster, subtitle: item.progress_label ?? "Continuar")
+        }
+        return cell
+    }
+
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        switch segmented.selectedSegmentIndex {
+        case 0:
+            guard indexPath.row < favorites.count else { return }
+            let item = favorites[indexPath.row]
+            openLibrary(item)
+        case 1, 2:
+            let list = segmented.selectedSegmentIndex == 1 ? history : cont
+            guard indexPath.row < list.count else { return }
+            openWatch(list[indexPath.row])
+        default: break
+        }
+    }
+
+    private func openLibrary(_ item: LibraryItem) {
+        let vc = item.isSeries
+            ? UIKitSeriesDetailViewController(seriesId: item.id)
+            : UIKitMovieDetailViewController(movieId: item.id)
+        navigationController?.pushViewController(vc, animated: true)
+    }
+
+    private func openWatch(_ item: WatchItem) {
+        if item.content_type == "episode", let sid = item.series_id {
+            navigationController?.pushViewController(UIKitSeriesDetailViewController(seriesId: sid), animated: true)
+        } else {
+            navigationController?.pushViewController(
+                UIKitMovieDetailViewController(movieId: item.content_id, startAt: item.progress ?? 0),
+                animated: true
+            )
+        }
+    }
+}
+
+final class UIKitLibraryCell: UITableViewCell {
+    static let reuseId = "lib"
+    private let poster = UIImageView()
+    private let titleLabel = UILabel()
+    private let subLabel = UILabel()
+
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        backgroundColor = .clear
+        selectionStyle = .none
+        poster.layer.cornerRadius = 6
+        poster.clipsToBounds = true
+        poster.contentMode = .scaleAspectFill
+        poster.backgroundColor = VixUITheme.card
+        poster.translatesAutoresizingMaskIntoConstraints = false
+        titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
+        titleLabel.textColor = .white
+        titleLabel.numberOfLines = 2
+        subLabel.font = .systemFont(ofSize: 12)
+        subLabel.textColor = VixUITheme.muted
+        let text = UIStackView(arrangedSubviews: [titleLabel, subLabel])
+        text.axis = .vertical
+        text.spacing = 4
+        text.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(poster)
+        contentView.addSubview(text)
+        NSLayoutConstraint.activate([
+            poster.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            poster.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            poster.widthAnchor.constraint(equalToConstant: 48),
+            poster.heightAnchor.constraint(equalToConstant: 68),
+            text.leadingAnchor.constraint(equalTo: poster.trailingAnchor, constant: 12),
+            text.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            text.centerYAnchor.constraint(equalTo: contentView.centerYAnchor)
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    func configure(title: String, poster path: String?, subtitle: String?) {
+        titleLabel.text = title
+        subLabel.text = subtitle
+        VixImageLoader.load(PlayUrls.poster(path), into: poster)
+    }
+
+    func setEmpty(_ msg: String) {
+        titleLabel.text = msg
+        subLabel.text = nil
+        poster.image = nil
     }
 }

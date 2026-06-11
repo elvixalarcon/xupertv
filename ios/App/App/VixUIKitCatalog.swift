@@ -1,5 +1,6 @@
 import UIKit
 import AVKit
+import AVFoundation
 
 // MARK: - Theme & images
 
@@ -40,17 +41,21 @@ final class UIKitHomeViewController: UIViewController {
     }
 
     private let tabs: [HomeTab] = [
-        HomeTab(slug: "recomendados", title: "Recomendados"),
+        HomeTab(slug: "inicio", title: "Inicio"),
         HomeTab(slug: "destacados", title: "Destacados"),
+        HomeTab(slug: "peliculas", title: "Películas"),
+        HomeTab(slug: "series", title: "Series"),
         HomeTab(slug: "kids", title: "Kids"),
-        HomeTab(slug: "anime", title: "Anime")
+        HomeTab(slug: "anime", title: "Anime"),
+        HomeTab(slug: "explorar", title: "Explorar"),
+        HomeTab(slug: "categorias", title: "Categorías")
     ]
 
     private var collectionView: UICollectionView!
     private var dataSource: UICollectionViewDiffableDataSource<Section, CatalogPoster>!
     private var heroSlides: [HeroSlide] = []
     private var sections: [CatalogSection] = []
-    private var selectedTab = "recomendados"
+    private var selectedTab = "inicio"
     private let heroView = VixHeroCarouselView()
     private let searchField = UITextField()
     private let spinner = UIActivityIndicatorView(style: .large)
@@ -207,7 +212,7 @@ final class UIKitHomeViewController: UIViewController {
                 let item = NSCollectionLayoutItem(layoutSize: NSCollectionLayoutSize(
                     widthDimension: .fractionalWidth(1), heightDimension: .fractionalHeight(1)))
                 let group = NSCollectionLayoutGroup.horizontal(layoutSize: NSCollectionLayoutSize(
-                    widthDimension: .fractionalWidth(1), heightDimension: .absolute(44)), subitems: [item])
+                    widthDimension: .fractionalWidth(1), heightDimension: .absolute(48)), subitems: [item])
                 let sec = NSCollectionLayoutSection(group: group)
                 sec.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 0, bottom: 8, trailing: 0)
                 return sec
@@ -238,27 +243,10 @@ final class UIKitHomeViewController: UIViewController {
         Task {
             do {
                 let api = AuthSession.shared.api
-                async let heroTask: [HeroSlide] = {
-                    if self.selectedTab == "recomendados" {
-                        return (try? await api.catalogHero()) ?? []
-                    }
-                    if let page = try? await api.storefront(slug: self.selectedTab) {
-                        return (page.hero ?? []).map { h in
-                            HeroSlide(id: h.id, title: h.title, poster: h.poster, backdrop: h.poster,
-                                      trailer: nil, content_type: h.content_type, description: nil, rating: nil)
-                        }
-                    }
-                    return []
-                }()
-                let catalogSections: [CatalogSection]
-                if self.selectedTab == "recomendados" {
-                    let home = try await api.catalogHome()
-                    catalogSections = home.sections ?? []
-                } else {
-                    let page = try await api.storefront(slug: self.selectedTab)
-                    catalogSections = page.sections ?? []
-                }
-                let hero = try await heroTask
+                let tab = self.selectedTab
+                async let heroTask: [HeroSlide] = self.loadHero(for: tab, api: api)
+                let catalogSections: [CatalogSection] = try await self.loadSections(for: tab, api: api)
+                let hero = await heroTask
                 await MainActor.run {
                     self.heroSlides = hero
                     self.sections = catalogSections
@@ -273,6 +261,37 @@ final class UIKitHomeViewController: UIViewController {
                     self.showError(error.localizedDescription)
                 }
             }
+        }
+    }
+
+    private func loadHero(for tab: String, api: VixAPI) async -> [HeroSlide] {
+        if tab == "inicio" || tab == "peliculas" || tab == "series" || tab == "categorias" {
+            return (try? await api.catalogHero()) ?? []
+        }
+        if ["destacados", "kids", "anime", "explorar"].contains(tab),
+           let page = try? await api.storefront(slug: tab) {
+            return (page.hero ?? []).map { h in
+                HeroSlide(id: h.id, title: h.title, poster: h.poster, backdrop: h.poster,
+                          trailer: nil, content_type: h.content_type, description: nil, rating: nil)
+            }
+        }
+        return []
+    }
+
+    private func loadSections(for tab: String, api: VixAPI) async throws -> [CatalogSection] {
+        switch tab {
+        case "inicio":
+            return try await api.catalogHome().sections ?? []
+        case "peliculas":
+            return try await api.catalogMovies()
+        case "series":
+            return try await api.catalogSeries()
+        case "categorias":
+            return try await api.catalogCategories()
+        case "destacados", "kids", "anime", "explorar":
+            return try await api.storefront(slug: tab).sections ?? []
+        default:
+            return try await api.catalogHome().sections ?? []
         }
     }
 
@@ -450,9 +469,12 @@ final class VixHeroCarouselView: UIView {
     }
 
     private func playTrailer(_ url: URL) {
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+        try? AVAudioSession.sharedInstance().setActive(true)
         let item = AVPlayerItem(url: url)
         let p = AVPlayer(playerItem: item)
-        p.isMuted = true
+        p.isMuted = false
+        p.volume = 1
         p.actionAtItemEnd = .none
         NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main
@@ -485,7 +507,7 @@ final class VixTabCell: UICollectionViewCell {
         scroll.showsHorizontalScrollIndicator = false
         scroll.translatesAutoresizingMaskIntoConstraints = false
         stack.axis = .horizontal
-        stack.spacing = 18
+        stack.spacing = 10
         stack.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(scroll)
         scroll.addSubview(stack)
@@ -509,21 +531,16 @@ final class VixTabCell: UICollectionViewCell {
         for tab in tabs {
             let btn = UIButton(type: .system)
             btn.setTitle(tab.title, for: .normal)
-            btn.titleLabel?.font = .boldSystemFont(ofSize: 15)
-            btn.setTitleColor(tab.slug == selected ? VixUITheme.accent : VixUITheme.muted, for: .normal)
+            btn.titleLabel?.font = .systemFont(ofSize: 14, weight: tab.slug == selected ? .bold : .medium)
+            let active = tab.slug == selected
+            btn.setTitleColor(active ? VixUITheme.accent : VixUITheme.muted, for: .normal)
+            btn.contentEdgeInsets = UIEdgeInsets(top: 8, left: 14, bottom: 8, right: 14)
+            btn.layer.cornerRadius = 18
+            btn.layer.borderWidth = active ? 1 : 0
+            btn.layer.borderColor = active ? VixUITheme.accent.withAlphaComponent(0.55).cgColor : nil
+            btn.backgroundColor = active ? VixUITheme.accent.withAlphaComponent(0.12) : .clear
             btn.addAction(UIAction { _ in onSelect(tab.slug) }, for: .touchUpInside)
-            if tab.slug == selected {
-                let line = UIView()
-                line.backgroundColor = VixUITheme.accent
-                line.translatesAutoresizingMaskIntoConstraints = false
-                line.heightAnchor.constraint(equalToConstant: 2).isActive = true
-                let col = UIStackView(arrangedSubviews: [btn, line])
-                col.axis = .vertical
-                col.spacing = 4
-                stack.addArrangedSubview(col)
-            } else {
-                stack.addArrangedSubview(btn)
-            }
+            stack.addArrangedSubview(btn)
         }
     }
 }
@@ -597,6 +614,7 @@ final class VixSectionHeader: UICollectionReusableView {
 
 final class UIKitLiveViewController: UIViewController {
     private let playerVC = AVPlayerViewController()
+    private var livePlayer: AVPlayer?
     private let categoryScroll = UIScrollView()
     private let categoryStack = UIStackView()
     private let table = UITableView(frame: .zero, style: .plain)
@@ -670,6 +688,25 @@ final class UIKitLiveViewController: UIViewController {
             spinner.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
         loadCategories()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        VixLivePlayback.current = self
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        if isMovingFromParent || tabBarController?.selectedViewController !== navigationController {
+            stopPlayback()
+        }
+    }
+
+    func stopPlayback() {
+        livePlayer?.pause()
+        livePlayer = nil
+        playerVC.player = nil
+        playerVC.view.isHidden = true
     }
 
     private func loadCategories() {
@@ -748,9 +785,11 @@ extension UIKitLiveViewController: UITableViewDataSource, UITableViewDelegate {
         let ch = channels[indexPath.row]
         guard let url = PlayUrls.live(server: VixConfig.serverURL, token: AuthSession.shared.api.token, channelId: ch.id) else { return }
         playerVC.view.isHidden = false
-        playerVC.player = AVPlayer(url: url)
-        playerVC.player?.automaticallyWaitsToMinimizeStalling = true
-        playerVC.player?.play()
+        let p = AVPlayer(url: url)
+        p.automaticallyWaitsToMinimizeStalling = true
+        livePlayer = p
+        playerVC.player = p
+        p.play()
     }
 }
 
@@ -867,6 +906,7 @@ final class UIKitSearchViewController: UIViewController, UITableViewDataSource, 
 
 final class UIKitMovieDetailViewController: UIViewController {
     private let movieId: Int
+    private let startAt: Double
     private let scroll = UIScrollView()
     private let hero = UIImageView()
     private let titleLabel = UILabel()
@@ -875,7 +915,11 @@ final class UIKitMovieDetailViewController: UIViewController {
     private let playerVC = AVPlayerViewController()
     private var detail: MovieDetail?
 
-    init(movieId: Int) { self.movieId = movieId; super.init(nibName: nil, bundle: nil) }
+    init(movieId: Int, startAt: Double = 0) {
+        self.movieId = movieId
+        self.startAt = startAt
+        super.init(nibName: nil, bundle: nil)
+    }
     required init?(coder: NSCoder) { fatalError() }
 
     override func viewDidLoad() {
@@ -947,8 +991,12 @@ final class UIKitMovieDetailViewController: UIViewController {
         guard let path = detail?.video_path,
               let url = PlayUrls.video(server: VixConfig.serverURL, token: AuthSession.shared.api.token, path: path) else { return }
         playerVC.view.isHidden = false
-        playerVC.player = AVPlayer(url: url)
-        playerVC.player?.play()
+        let p = AVPlayer(url: url)
+        if startAt > 0 {
+            p.seek(to: CMTime(seconds: startAt, preferredTimescale: 600))
+        }
+        playerVC.player = p
+        p.play()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
