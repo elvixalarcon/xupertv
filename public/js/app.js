@@ -92,7 +92,11 @@ function applyVixPlatformUi() {
   if (isVixNativeApp()) document.documentElement.classList.add('vix-native');
   if (isCapacitorIos()) {
     document.documentElement.classList.add('vix-capacitor');
+    if (isAppleMobile() && Math.min(screen.width, screen.height) >= 768) {
+      document.documentElement.classList.add('vix-ipad');
+    }
     try { document.body.style.webkitOverflowScrolling = 'touch'; } catch { /* ignore */ }
+    document.getElementById('vix-update-banner')?.remove();
   }
   if (platform === 'tv') {
     applyTvNavFocusables();
@@ -3234,6 +3238,8 @@ function isUpdateForThisApp(info, platform) {
 
 async function checkNativeAppUpdate() {
   if (!isVixNativeApp()) return;
+  /* iOS/Capacitor: la app carga la web del servidor; no usa APK ni banner de Android. */
+  if (isCapacitorIos() || VIX_PLATFORM === 'ios') return;
   const platform = nativeAppPlatform();
   const code = window.VIXTV_NATIVE?.versionCode
     ?? (parseInt(new URLSearchParams(location.search).get('vix_build') || '0', 10) || 1);

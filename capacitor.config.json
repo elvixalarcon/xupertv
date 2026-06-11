@@ -3,8 +3,6 @@
   "appName": "Vix TV",
   "webDir": "public",
   "server": {
-    "url": "https://tv.vixred.com",
-    "cleartext": true,
     "androidScheme": "https"
   },
   "ios": {

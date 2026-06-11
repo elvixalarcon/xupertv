@@ -4282,9 +4282,71 @@ html.vix-ios .ios-nav-btn.ios-nav-live.active {
   border-color: var(--red);
 }
 
+/* iOS: una sola barra de menú (sin topnav ni bottom nav duplicados) */
+html.vix-ios .topnav {
+  display: none !important;
+}
+
+html.vix-ios .mobile-bottom-nav {
+  display: none !important;
+}
+
 html.vix-ios .topbar {
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: auto auto;
   align-items: center;
+  gap: 8px 12px;
+  padding: 10px 16px;
+  padding-top: calc(10px + env(safe-area-inset-top));
+}
+
+html.vix-ios .topbar .logo-sm {
+  grid-column: 1;
+  grid-row: 1;
+  margin: 0;
+}
+
+html.vix-ios .topbar .search-trigger-btn {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: start;
+}
+
+html.vix-ios .topbar-right {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+html.vix-ios .topbar-right .btn-ghost {
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  min-height: 36px;
+  white-space: nowrap;
+}
+
+html.vix-ios .ios-menu-bar {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  order: unset;
+  flex: unset;
+  width: 100%;
+  margin: 0;
+  padding: 8px 0 2px;
+  border-top: 1px solid #1a1a2e;
+}
+
+html.vix-ipad .ios-menu-bar {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+html.vix-ipad .ios-nav-btn {
+  font-size: 0.88rem;
+  padding: 10px 16px;
 }
 
 html.vix-ios body {
