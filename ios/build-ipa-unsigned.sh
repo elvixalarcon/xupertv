@@ -41,10 +41,12 @@ if [[ ! -d "$APP_PATH" ]]; then
   exit 1
 fi
 
-mkdir -p Payload "$OUT_DIR"
-cp -R "$APP_PATH" Payload/
-(cd "$IOS_APP" && zip -qr "$OUT_DIR/$IPA_NAME" Payload)
-rm -rf Payload
+STAGE="$BUILD_DIR/ipa-stage"
+rm -rf "$STAGE"
+mkdir -p "$STAGE/Payload" "$OUT_DIR"
+cp -R "$APP_PATH" "$STAGE/Payload/"
+(cd "$STAGE" && zip -qr "$OUT_DIR/$IPA_NAME" Payload)
+rm -rf "$STAGE"
 
 SIZE=$(du -h "$OUT_DIR/$IPA_NAME" | cut -f1)
 echo ""
