@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Vix TV</string>
+    <string name="settings_title">Servidor Vix TV</string>
+    <string name="server_hint">Por defecto: https://tv.vixred.com — también puedes usar la IP local de tu servidor (ej. http://192.168.1.100).</string>
+    <string name="server_hint_example">https://tv.vixred.com</string>
+    <string name="server_reset_btn">Usar servidor oficial (tv.vixred.com)</string>
+    <string name="server_reset_default">Servidor oficial restaurado</string>
+    <string name="save">Guardar y volver</string>
+    <string name="server_required">Escribe la URL del servidor</string>
+    <string name="server_saved">Servidor guardado</string>
+    <string name="error_load">No se pudo conectar al servidor</string>
+    <string name="open_settings">Configurar servidor</string>
+    <string name="native_login_sub">Inicio de sesión nativo (recomendado en TV)</string>
+    <string name="native_login_user_hint">Usuario</string>
+    <string name="native_login_pass_hint">Contraseña</string>
+    <string name="native_login_btn">Ingresar</string>
+    <string name="native_login_connecting">Conectando…</string>
+    <string name="retry">Reintentar</string>
+    <string name="update_channel_name">Actualizaciones Vix TV</string>
+    <string name="update_channel_desc">Avisos cuando hay una nueva versión de la app</string>
+    <string name="update_notification_title">Actualización disponible</string>
+    <string name="update_notification_title_version">Actualización v%1$s</string>
+    <string name="update_default_message">Hay una nueva versión de Vix TV. Toca para descargar.</string>
+    <string name="update_download_starting">Preparando descarga…</string>
+    <string name="update_downloading">Descargando actualización…</string>
+    <string name="update_download_failed">No se pudo descargar la actualización</string>
+    <string name="update_install_prompt">Toca Instalar para completar la actualización</string>
+    <string name="update_install_title_generic">Instalar actualización</string>
+    <string name="update_install_message">Se descargó la nueva versión. Pulsa Instalar para actualizar Vix TV.\n\nSi falla, desinstala la app anterior e instala de nuevo (solo la primera vez tras cambio de firma).</string>
+    <string name="update_install_action">Instalar</string>
+    <string name="update_already_latest">Ya tienes la última versión instalada</string>
+    <string name="update_signature_hint">No se pudo instalar. Desinstala Vix TV, vuelve a instalar desde https://tv.vixred.com/d/tv y luego las actualizaciones automáticas funcionarán.</string>
+    <string name="update_action_download">Descargar</string>
+    <string name="update_later">Más tarde</string>
+    <string name="update_permission_title">Permiso de instalación</string>
+    <string name="update_permission_message">Para actualizar Vix TV, permite instalar apps desconocidas para esta aplicación.</string>
+    <string name="update_permission_open">Abrir ajustes</string>
+</resources>

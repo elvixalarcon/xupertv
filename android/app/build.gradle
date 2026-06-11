@@ -1,0 +1,81 @@
+plugins {
+    id 'com.android.application'
+}
+
+def keystorePropertiesFile = rootProject.file('keystore.properties')
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+android {
+    namespace 'tv.vix.app'
+    compileSdk 34
+
+    defaultConfig {
+        minSdk 23
+        targetSdk 34
+        versionCode 66
+        versionName '1.0.65'
+        buildConfigField 'String', 'DEFAULT_SERVER', '"https://tv.vixred.com"'
+    }
+
+    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                storeFile rootProject.file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
+
+    flavorDimensions += 'platform'
+    productFlavors {
+        mobile {
+            dimension 'platform'
+            applicationId 'tv.vix.mobile'
+            resValue 'string', 'app_name', 'Vix TV'
+            buildConfigField 'String', 'PLATFORM', '"mobile"'
+        }
+        tv {
+            dimension 'platform'
+            applicationId 'tv.vix.tv'
+            resValue 'string', 'app_name', 'Vix TV'
+            buildConfigField 'String', 'PLATFORM', '"tv"'
+            minSdk 23
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug
+        }
+        debug {
+            applicationIdSuffix '.debug'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    tvImplementation 'androidx.leanback:leanback:1.0.0'
+    tvImplementation 'androidx.recyclerview:recyclerview:1.3.2'
+    tvImplementation 'androidx.media3:media3-exoplayer:1.2.1'
+    tvImplementation 'androidx.media3:media3-exoplayer-hls:1.2.1'
+    tvImplementation 'androidx.media3:media3-ui:1.2.1'
+    tvImplementation 'com.github.bumptech.glide:glide:4.16.0'
+}

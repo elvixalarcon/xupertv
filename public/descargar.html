@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#07070d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Vix TV">
+  <link rel="apple-touch-icon" href="/icons/icon-192.svg">
+  <title>Descargar Vix TV</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+      background: #07070d;
+      color: #eee;
+      padding: 24px 16px 48px;
+    }
+    .wrap { max-width: 640px; margin: 0 auto; }
+    h1 { color: #f5c518; margin: 0 0 8px; font-size: 1.75rem; }
+    .lead { color: #aaa; line-height: 1.55; margin: 0 0 20px; }
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .tab {
+      border: 1px solid #333;
+      background: #15151f;
+      color: #ccc;
+      border-radius: 999px;
+      padding: 8px 14px;
+      font-size: .9rem;
+      cursor: pointer;
+    }
+    .tab.active {
+      background: #f5c518;
+      color: #111;
+      border-color: #f5c518;
+      font-weight: 700;
+    }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .card {
+      background: #12121a;
+      border: 1px solid #2a2a35;
+      border-radius: 12px;
+      padding: 18px;
+      margin: 14px 0;
+    }
+    .label {
+      font-size: .72rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #888;
+      margin-bottom: 8px;
+    }
+    .url {
+      display: block;
+      word-break: break-all;
+      font-size: 1.05rem;
+      color: #6cf;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .url:hover { text-decoration: underline; }
+    ol, ul { padding-left: 20px; color: #ccc; line-height: 1.55; }
+    li { margin: 8px 0; }
+    .badge {
+      display: inline-block;
+      background: #f5c518;
+      color: #111;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: .82rem;
+    }
+    .badge-ios {
+      background: #007aff;
+      color: #fff;
+    }
+    .btn {
+      display: inline-block;
+      margin-top: 12px;
+      padding: 12px 18px;
+      border-radius: 8px;
+      background: #e50914;
+      color: #fff;
+      font-weight: 700;
+      text-decoration: none;
+      border: none;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    .btn-secondary {
+      background: #252532;
+      color: #eee;
+      border: 1px solid #444;
+    }
+    .note {
+      background: rgba(0, 122, 255, 0.12);
+      border: 1px solid rgba(0, 122, 255, 0.35);
+      border-radius: 8px;
+      padding: 12px 14px;
+      color: #b8d4ff;
+      font-size: .92rem;
+      line-height: 1.45;
+    }
+    .note-warn {
+      background: rgba(245, 197, 24, 0.1);
+      border-color: rgba(245, 197, 24, 0.35);
+      color: #f5e6a8;
+    }
+    .share-icon {
+      display: inline-block;
+      vertical-align: middle;
+      width: 22px;
+      height: 22px;
+      border: 2px solid #007aff;
+      border-radius: 4px;
+      position: relative;
+      margin: 0 4px;
+    }
+    .share-icon::before {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-top: 7px solid #007aff;
+    }
+    .share-icon::after {
+      content: '';
+      position: absolute;
+      bottom: 3px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 10px;
+      height: 6px;
+      border: 2px solid #007aff;
+      border-top: none;
+      border-radius: 0 0 2px 2px;
+    }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>📺 Descargar Vix TV</h1>
+    <p class="lead">Elige tu dispositivo. En Android instalas un APK; en iPhone instalas la app desde Safari (sin App Store).</p>
+
+    <div class="tabs" id="tabs">
+      <button type="button" class="tab" data-panel="iphone">📱 iPhone / iPad</button>
+      <button type="button" class="tab" data-panel="android-tv">📺 Android TV</button>
+      <button type="button" class="tab" data-panel="android-mobile">🤖 Android móvil</button>
+    </div>
+
+    <section id="iphone" class="panel">
+      <div class="card">
+        <div class="label">iPhone / iPad</div>
+        <span class="badge badge-ios">Instalar desde Safari</span>
+        <p style="margin:12px 0 8px">
+          Apple <strong>no permite</strong> instalar un archivo <code>.ipa</code> tocando un enlace como en Android.
+          La forma oficial sin App Store es añadir Vix TV a la pantalla de inicio (app web).
+        </p>
+        <div class="note note-warn" style="margin-top:12px">
+          Funciona igual que una app: icono en el inicio, pantalla completa y acceso directo a películas, series y directos.
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="label">Enlace corto</div>
+        <a class="url" id="url-ios" href="/d/ios"></a>
+        <div class="actions">
+          <a class="btn" id="open-app-ios" href="/">Abrir Vix TV</a>
+          <button type="button" class="btn btn-secondary hidden" id="btn-installed">✓ Ya instalada</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="label">Pasos en iPhone (Safari)</div>
+        <ol>
+          <li>Abre el enlace de arriba en <strong>Safari</strong> (no Chrome).</li>
+          <li>Inicia sesión en Vix TV si hace falta.</li>
+          <li>Toca el botón <strong>Compartir</strong> <span class="share-icon" aria-hidden="true"></span> (abajo en Safari).</li>
+          <li>Elige <strong>Añadir a pantalla de inicio</strong>.</li>
+          <li>Confirma con <strong>Añadir</strong>. Verás el icono <strong>Vix TV</strong> en tu inicio.</li>
+        </ol>
+      </div>
+
+      <div class="card">
+        <div class="label">App nativa con eSign (avanzado)</div>
+        <span class="badge badge-ios">IPA + eSign</span>
+        <p style="margin:12px 0 8px;color:#ccc;line-height:1.55">
+          Si tienes <strong>eSign</strong> en el iPhone, puedes instalar un IPA nativo (como el APK en Android).
+          <strong>eSign firma el archivo en el teléfono</strong> — no hace falta Mac para instalar, pero el IPA
+          debe compilarse una vez en macOS o con GitHub Actions.
+        </p>
+        <p style="margin:8px 0 6px">Descarga del IPA (sin firmar, para eSign):</p>
+        <a class="url" id="url-ipa" href="/ipa/ios">/ipa/ios</a>
+        <ol style="margin-top:14px">
+          <li>Descarga el IPA en Safari y guárdalo en <strong>Archivos</strong>.</li>
+          <li>Abre <strong>eSign</strong> → importa el IPA → elige tu certificado → <strong>Firmar</strong> → <strong>Instalar</strong>.</li>
+          <li>Confía en el desarrollador en Ajustes si iOS lo pide.</li>
+        </ol>
+        <p style="color:#888;font-size:13px;margin:12px 0 0">
+          Si el enlace dice «no disponible», el administrador aún no ha subido el IPA.
+          Mientras tanto usa la PWA de arriba.
+        </p>
+      </div>
+    </section>
+
+    <section id="android-tv" class="panel">
+      <div class="card">
+        <div class="label">Android TV / TV Box / Fire TV</div>
+        <span class="badge" id="badge-tv-version">Vix TV TV</span>
+        <p style="margin:10px 0 6px">En la app <strong>Downloader</strong> → Browser, pega esta URL:</p>
+        <a class="url" id="url-tv" href="/d/tv"></a>
+        <p style="margin-top:12px;font-size:.9rem">Atajo: <a class="url" id="url-tv-short" href="/tv">/tv</a></p>
+        <div class="actions">
+          <a class="btn" id="btn-download-tv" href="/apk/tv">Descargar APK TV</a>
+        </div>
+        <p id="meta-tv" class="lead" style="margin-top:10px;font-size:.85rem"></p>
+      </div>
+      <div class="card">
+        <div class="label">Pasos en Downloader (TV)</div>
+        <ol>
+          <li>Abre <strong>Downloader</strong> en tu TV.</li>
+          <li>Ve a <strong>Browser</strong>.</li>
+          <li>Pega la URL y pulsa <strong>Go</strong>.</li>
+          <li>Cuando termine, instala el APK.</li>
+          <li>Abre <strong>Vix TV</strong>.</li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="android-mobile" class="panel">
+      <div class="card">
+        <div class="label">Celular / tablet Android</div>
+        <span class="badge" id="badge-mobile-version">Vix TV Móvil</span>
+        <a class="url" id="url-mobile" href="/d/m"></a>
+        <div class="actions">
+          <a class="btn" id="btn-download-mobile" href="/apk/mobile">Descargar APK móvil</a>
+        </div>
+        <p id="meta-mobile" class="lead" style="margin-top:10px;font-size:.85rem"></p>
+      </div>
+      <div class="card">
+        <div class="label">Instalación</div>
+        <ol>
+          <li>Descarga el APK con el enlace de arriba.</li>
+          <li>Si Android lo pide, permite instalar de fuentes desconocidas.</li>
+          <li>Abre <strong>Vix TV</strong> — ya apunta a este servidor.</li>
+        </ol>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const base = location.origin.replace(/\/$/, '');
+
+    function formatBytes(n) {
+      if (!n || n <= 0) return '';
+      const u = ['B', 'KB', 'MB', 'GB'];
+      let v = n;
+      let i = 0;
+      while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+      return `${v.toFixed(i > 0 ? 1 : 0)} ${u[i]}`;
+    }
+
+    function applyDownloadLinks(links) {
+      const tvUrl = links.tv_short || base + '/d/tv';
+      const mobileUrl = links.mobile_short || base + '/d/m';
+      document.getElementById('url-tv').textContent = tvUrl;
+      document.getElementById('url-tv').href = tvUrl;
+      document.getElementById('url-tv-short').href = links.tv_code || base + '/tv';
+      document.getElementById('url-tv-short').textContent = (links.tv_code || base + '/tv').replace(base, '') || '/tv';
+      document.getElementById('url-mobile').textContent = mobileUrl;
+      document.getElementById('url-mobile').href = mobileUrl;
+      document.getElementById('url-ios').textContent = links.ios_short || base + '/d/ios';
+      document.getElementById('url-ios').href = links.ios_install || base + '/descargar#iphone';
+      document.getElementById('open-app-ios').href = base + '/';
+      const urlIpa = document.getElementById('url-ipa');
+      if (urlIpa) {
+        const ipaHref = links.ipa_direct || base + '/ipa/ios';
+        urlIpa.textContent = ipaHref.replace(base, '') || '/ipa/ios';
+        urlIpa.href = ipaHref;
+      }
+
+      const tvVer = links.tv_version_name ? `v${links.tv_version_name}` : '';
+      const mobVer = links.mobile_version_name ? `v${links.mobile_version_name}` : '';
+      document.getElementById('badge-tv-version').textContent = tvVer ? `APK TV ${tvVer}` : 'APK TV';
+      document.getElementById('badge-mobile-version').textContent = mobVer ? `APK Móvil ${mobVer}` : 'APK Móvil';
+
+      const btnTv = document.getElementById('btn-download-tv');
+      const btnMob = document.getElementById('btn-download-mobile');
+      if (links.tv_apk_available !== false) {
+        btnTv.href = links.tv_apk_direct || links.tv_apk || base + '/apk/tv';
+      } else {
+        btnTv.classList.add('hidden');
+      }
+      if (links.mobile_apk_available !== false) {
+        btnMob.href = links.mobile_apk_direct || links.mobile_apk || base + '/apk/mobile';
+      } else {
+        btnMob.classList.add('hidden');
+      }
+
+      const metaTv = document.getElementById('meta-tv');
+      const metaMob = document.getElementById('meta-mobile');
+      if (metaTv) {
+        const parts = [tvVer, formatBytes(links.tv_apk_size)].filter(Boolean);
+        metaTv.textContent = parts.length ? `Última versión publicada: ${parts.join(' · ')}` : '';
+      }
+      if (metaMob) {
+        const parts = [mobVer, formatBytes(links.mobile_apk_size)].filter(Boolean);
+        metaMob.textContent = parts.length ? `Última versión publicada: ${parts.join(' · ')}` : '';
+      }
+    }
+
+    applyDownloadLinks({
+      tv_short: base + '/d/tv',
+      mobile_short: base + '/d/m',
+      ios_short: base + '/d/ios',
+      ios_install: base + '/descargar#iphone',
+      tv_code: base + '/tv',
+      tv_apk: base + '/apk/tv',
+      mobile_apk: base + '/apk/mobile'
+    });
+
+    fetch(base + '/api/app/download-links')
+      .then((r) => r.json())
+      .then(applyDownloadLinks)
+      .catch(() => {});
+
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent)
+      || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isStandalone = window.navigator.standalone === true
+      || window.matchMedia('(display-mode: standalone)').matches;
+
+    const panels = {
+      iphone: document.getElementById('iphone'),
+      'android-tv': document.getElementById('android-tv'),
+      'android-mobile': document.getElementById('android-mobile')
+    };
+    const tabs = document.querySelectorAll('.tab');
+
+    function showPanel(name) {
+      Object.entries(panels).forEach(([key, el]) => el.classList.toggle('active', key === name));
+      tabs.forEach((t) => t.classList.toggle('active', t.dataset.panel === name));
+      history.replaceState(null, '', name === 'iphone' ? '#iphone' : `#${name}`);
+    }
+
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', () => showPanel(tab.dataset.panel));
+    });
+
+    const hash = (location.hash || '').replace('#', '');
+    const defaultPanel = hash === 'iphone' || hash === 'ios' ? 'iphone'
+      : hash === 'android-mobile' || hash === 'mobile' ? 'android-mobile'
+      : hash === 'android-tv' || hash === 'tv' ? 'android-tv'
+      : isIOS ? 'iphone' : 'android-tv';
+    showPanel(defaultPanel);
+
+    if (isStandalone) {
+      document.getElementById('btn-installed').classList.remove('hidden');
+      document.getElementById('open-app-ios').textContent = 'Abrir Vix TV instalada';
+    }
+  </script>
+</body>
+</html>

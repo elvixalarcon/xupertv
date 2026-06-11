@@ -1,0 +1,15 @@
+services:
+  xupertv:
+    build: .
+    container_name: xupertv
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./data:/app/data
+      - ./public:/app/public
+      - ./server:/app/server
+    environment:
+      - JWT_SECRET=xupertv-prod-secret-2026
+      - PORT=80
+      - PORT2=8080
+      - STREAM_PROXY_ENABLED=0

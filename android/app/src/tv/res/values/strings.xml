@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="open_settings"></string>
+    <string name="server_hint"></string>
+    <string name="server_hint_example"></string>
+    <string name="server_reset_btn">Restaurar conexión</string>
+    <string name="update_signature_hint">No se pudo instalar. Desinstala la app anterior e instala de nuevo.</string>
+</resources>

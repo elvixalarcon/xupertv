@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="380dp"
+    android:layout_height="214dp"
+    android:layout_marginEnd="14dp"
+    android:background="@drawable/tv_poster_selector"
+    android:focusable="true"
+    android:padding="4dp">
+
+    <ImageView
+        android:id="@+id/tv_hero_img"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/tv_card"
+        android:scaleType="centerCrop"
+        android:contentDescription="@null" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="80dp"
+        android:layout_gravity="bottom"
+        android:background="#cc000000" />
+
+    <TextView
+        android:id="@+id/tv_hero_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:ellipsize="end"
+        android:maxLines="2"
+        android:padding="12dp"
+        android:textColor="@color/tv_gold"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+</FrameLayout>

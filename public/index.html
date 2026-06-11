@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+  <meta name="theme-color" content="#07070d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Vix TV">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icons/icon-192.svg">
+  <link rel="manifest" href="/manifest.json">
+  <title>Vix TV</title>
+  <link rel="stylesheet" href="/css/style.css?v=145">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- LOGIN -->
+  <div id="login-screen" class="screen active">
+    <div class="login-bg"></div>
+    <div class="login-box">
+      <div class="logo">
+        <span class="logo-x">V</span><span class="logo-text">ix TV</span>
+      </div>
+      <p class="login-sub">Tu entretenimiento en un solo lugar</p>
+      <form id="login-form" novalidate>
+        <input type="text" id="login-user" class="tv-focusable" placeholder="Usuario" autocomplete="username" tabindex="0">
+        <input type="password" id="login-pass" class="tv-focusable" placeholder="Contraseña" autocomplete="current-password" tabindex="0">
+        <button type="button" id="login-submit-btn" class="btn-primary tv-focusable" tabindex="0"
+          onclick="return window.vixDoLogin &amp;&amp; window.vixDoLogin(event)">Ingresar</button>
+        <p id="login-error" class="error-msg"></p>
+        <p id="login-server-hint" class="login-server-hint hidden"></p>
+        <div id="login-busy" class="login-busy hidden" aria-live="polite">
+          <div class="login-busy-box">Conectando…</div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- PERFILES -->
+  <div id="profile-screen" class="screen">
+    <div class="profile-picker-wrap">
+      <div id="profile-setup-panel" class="profile-setup-panel hidden">
+        <h1 class="profile-picker-title" id="profile-form-title">Crea tu perfil</h1>
+        <p class="profile-picker-sub" id="profile-form-sub">La primera vez debes elegir un nombre. Tu lista, favoritos y progreso serán solo de este perfil.</p>
+        <form id="profile-setup-form" class="profile-setup-form">
+          <label class="profile-setup-label" for="profile-setup-name">Nombre del perfil</label>
+          <input type="text" id="profile-setup-name" maxlength="24" placeholder="Ej. María, Papá, Kids…" autocomplete="nickname" required>
+          <label class="profile-setup-kids-label">
+            <input type="checkbox" id="profile-setup-kids"> Perfil infantil (solo contenido apto y PIN para salir)
+          </label>
+          <label class="profile-setup-label hidden" id="profile-pin-wrap" for="profile-setup-pin">PIN de 4 dígitos</label>
+          <input type="password" id="profile-setup-pin" class="hidden" maxlength="4" inputmode="numeric" pattern="[0-9]{4}" placeholder="••••" autocomplete="off">
+          <p class="profile-pin-hint hidden" id="profile-pin-hint">El PIN se pide al cambiar a otro perfil desde el infantil.</p>
+          <button type="button" id="profile-setup-submit" class="btn-primary tv-focusable" tabindex="0">Empezar a ver</button>
+          <button type="button" id="profile-form-cancel" class="btn-ghost profile-form-cancel hidden tv-focusable" tabindex="0">Cancelar</button>
+          <button type="button" id="profile-form-delete" class="btn-ghost profile-form-delete hidden tv-focusable" tabindex="0">Eliminar perfil</button>
+        </form>
+        <p id="profile-setup-error" class="error-msg"></p>
+      </div>
+      <div id="profile-picker-panel">
+        <h1 class="profile-picker-title" id="profile-picker-title">¿Quién está viendo?</h1>
+        <p class="profile-picker-sub" id="profile-picker-sub">Cada perfil tiene su lista, me gusta y progreso</p>
+        <div id="profile-grid" class="profile-grid"></div>
+        <button type="button" id="profile-manage-btn" class="btn-ghost profile-manage-btn tv-focusable" tabindex="0">Administrar perfiles</button>
+        <p id="profile-error" class="error-msg"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- APP -->
+  <div id="app" class="screen">
+    <header class="topbar">
+      <div class="logo-sm"><span class="logo-x">V</span>ix TV</div>
+      <button type="button" id="global-search-btn" class="search-trigger-btn tv-focusable" aria-label="Buscar" title="Buscar (/)">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+      </button>
+      <nav class="topnav" id="topnav">
+        <button data-page="home" class="nav-btn tv-focusable active" tabindex="0">Inicio</button>
+        <button data-page="destacados" class="nav-btn tv-focusable" tabindex="0">Destacados</button>
+        <button data-page="movies" class="nav-btn tv-focusable" tabindex="0">Películas</button>
+        <button data-page="series" class="nav-btn tv-focusable" tabindex="0">Series</button>
+        <button data-page="kids" class="nav-btn tv-focusable" tabindex="0">Kids</button>
+        <button data-page="anime" class="nav-btn tv-focusable" tabindex="0">Anime</button>
+        <button data-page="explorar" class="nav-btn tv-focusable" tabindex="0">Explorar</button>
+        <button data-page="categories" class="nav-btn tv-focusable hidden" id="nav-categories" tabindex="0">Categorías</button>
+        <button data-page="mylist" class="nav-btn tv-focusable" tabindex="0">Mi lista</button>
+        <button data-page="live" class="nav-btn tv-focusable live-btn" tabindex="0"><span class="live-dot" aria-hidden="true"></span> En Vivo</button>
+      </nav>
+      <div class="topbar-right">
+        <button type="button" id="switch-profile-btn" class="btn-ghost profile-switch-btn tv-focusable hidden" title="Cambiar perfil" tabindex="0">Perfiles</button>
+        <a href="/admin" id="admin-panel-link" class="btn-ghost admin-panel-link tv-focusable hidden" tabindex="0">Sistema</a>
+        <button type="button" id="account-btn" class="btn-ghost tv-focusable" title="Mi cuenta" tabindex="0"><span id="user-name"></span></button>
+        <button id="logout-btn" class="btn-ghost tv-focusable" tabindex="0">Salir</button>
+      </div>
+    </header>
+
+    <main id="main-content">
+      <!-- HOME -->
+      <section id="page-home" class="page active">
+        <div class="hero" id="hero-banner">
+          <div class="hero-slides" id="hero-slides" aria-hidden="true"></div>
+          <div class="hero-overlay"></div>
+          <div class="hero-content">
+            <div class="hero-meta" id="hero-meta"></div>
+            <h1 id="hero-title">Bienvenido a Vix TV</h1>
+            <p id="hero-desc">Disfruta películas, series y TV en vivo</p>
+            <div class="hero-actions">
+              <button class="btn-primary tv-focusable" id="hero-play" tabindex="0">▶ Reproducir</button>
+              <button type="button" class="btn-secondary hero-trailer-audio-btn tv-focusable hidden" id="hero-trailer-audio" tabindex="0" aria-label="Activar audio del tráiler" title="Activar audio">🔊</button>
+            </div>
+          </div>
+          <div class="hero-dots" id="hero-dots"></div>
+        </div>
+        <section class="catalog-row catalog-row--continue hidden" id="row-continue-section" data-section-id="continue-watching">
+          <div class="catalog-row__header">
+            <div>
+              <h2 class="catalog-row__title">▶ Continuar viendo</h2>
+              <span class="catalog-row__subtitle">Retoma donde lo dejaste</span>
+            </div>
+          </div>
+          <div class="catalog-row__track carousel" id="row-continue"></div>
+        </section>
+        <div id="home-catalog-rows" class="catalog-page"></div>
+      </section>
+
+      <!-- VER MÁS (sección completa) -->
+      <section id="page-browse" class="page">
+        <button class="btn-back tv-focusable" id="browse-back" tabindex="0">← Volver</button>
+        <h2 class="page-title" id="browse-page-title">Sección</h2>
+        <p class="page-sub" id="browse-page-count"></p>
+        <div id="browse-grid" class="grid page-catalog-grid"></div>
+        <p id="browse-empty" class="catalog-empty hidden">No hay contenido en esta sección</p>
+      </section>
+
+      <!-- CATEGORÍAS -->
+      <section id="page-categories" class="page">
+        <h2 class="page-title">Categorías</h2>
+        <p class="page-sub">Películas y series por género — cada título aparece una sola vez</p>
+        <div id="categories-catalog-rows" class="catalog-page"></div>
+      </section>
+
+      <!-- MY LIST -->
+      <section id="page-mylist" class="page">
+        <h2 class="page-title">Mi lista</h2>
+        <div class="mylist-tabs">
+          <button type="button" class="mylist-tab active tv-focusable" data-tab="watchlist">➕ Mi lista</button>
+          <button type="button" class="mylist-tab tv-focusable" data-tab="likes">👍 Me gusta</button>
+        </div>
+        <div id="mylist-watchlist" class="mylist-panel grid"></div>
+        <div id="mylist-likes" class="mylist-panel grid hidden"></div>
+      </section>
+
+      <!-- DESTACADOS -->
+      <section id="page-destacados" class="page storefront-page">
+        <div class="storefront-hero-wrap" data-sf-hero="destacados"></div>
+        <div id="destacados-rows" class="catalog-page"></div>
+        <p id="destacados-empty" class="catalog-empty hidden">No hay contenido destacado disponible</p>
+      </section>
+
+      <!-- KIDS -->
+      <section id="page-kids" class="page storefront-page">
+        <div class="storefront-hero-wrap" data-sf-hero="kids"></div>
+        <div id="kids-rows" class="catalog-page"></div>
+        <p id="kids-empty" class="catalog-empty hidden">No hay contenido infantil disponible</p>
+      </section>
+
+      <!-- ANIME -->
+      <section id="page-anime" class="page storefront-page">
+        <div class="storefront-hero-wrap" data-sf-hero="anime"></div>
+        <div id="anime-rows" class="catalog-page"></div>
+        <p id="anime-empty" class="catalog-empty hidden">No hay contenido anime disponible</p>
+      </section>
+
+      <!-- EXPLORAR -->
+      <section id="page-explorar" class="page storefront-page">
+        <div class="storefront-hero-wrap" data-sf-hero="explorar"></div>
+        <div id="explorar-platforms" class="platform-grid"></div>
+        <div id="explorar-rows" class="catalog-page"></div>
+        <p id="explorar-empty" class="catalog-empty hidden">No hay plataformas disponibles</p>
+      </section>
+
+      <!-- MOVIES -->
+      <section id="page-movies" class="page storefront-page">
+        <div class="storefront-hero-wrap" data-sf-hero="movies"></div>
+        <div id="movies-catalog-rows" class="catalog-page"></div>
+        <p id="movies-empty" class="catalog-empty hidden">No hay películas disponibles</p>
+      </section>
+
+      <!-- MOVIE DETAIL -->
+      <section id="page-movie-detail" class="page">
+        <button class="btn-back tv-focusable" id="movie-back" tabindex="0">← Volver</button>
+        <div id="movie-detail-content"></div>
+      </section>
+
+      <!-- SERIES -->
+      <section id="page-series" class="page storefront-page">
+        <div class="storefront-hero-wrap" data-sf-hero="series"></div>
+        <div id="series-catalog-rows" class="catalog-page"></div>
+        <p id="series-empty" class="catalog-empty hidden">No hay series con episodios disponibles</p>
+      </section>
+
+      <!-- SERIES DETAIL -->
+      <section id="page-series-detail" class="page">
+        <button class="btn-back tv-focusable" id="series-back" tabindex="0">← Volver</button>
+        <div id="series-detail-content"></div>
+      </section>
+
+      <!-- LIVE -->
+      <section id="page-live" class="page">
+        <div class="live-pluto">
+          <div class="live-pluto-hero" id="live-hero">
+            <div class="live-pluto-hero-player" id="live-hero-player">
+              <video id="live-preview-video" playsinline webkit-playsinline x-webkit-airplay="allow" muted autoplay preload="auto" title="Doble clic para ampliar o minimizar"></video>
+              <div class="live-pluto-hero-placeholder" id="live-hero-placeholder">
+                <span aria-hidden="true">📺</span>
+                <p>Selecciona un canal en la guía</p>
+              </div>
+              <div class="live-hero-panel hidden" id="live-hero-overlay">
+                <div class="live-hero-dock">
+                  <div class="live-hero-panel-head">
+                    <div class="live-hero-show-info">
+                      <h2 class="live-pluto-hero-title" id="live-hero-title">Selecciona un canal</h2>
+                      <p class="live-pluto-hero-meta" id="live-hero-meta"></p>
+                    </div>
+                    <div class="live-hero-head-actions">
+                      <div class="live-hero-controls-row">
+                        <button type="button" class="live-ctrl-btn" id="live-preview-mute" aria-label="Silenciar" title="Silenciar (m)">
+                          <span class="live-ctrl-icon live-ctrl-mute" aria-hidden="true"></span>
+                          <span class="live-ctrl-tip">Silenciar (m)</span>
+                        </button>
+                        <label class="live-volume-wrap" title="Volumen">
+                          <span class="sr-only">Volumen</span>
+                          <input type="range" id="live-preview-volume" class="live-volume" min="0" max="100" value="100" aria-label="Volumen">
+                        </label>
+                      </div>
+                      <div class="live-hero-tools">
+                        <button type="button" class="live-ctrl-btn" id="live-preview-fullscreen" aria-label="Pantalla completa" title="Pantalla completa">⛶</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="live-hero-progress-wrap">
+                    <span class="live-hero-time" id="live-hero-time-start"></span>
+                    <div class="live-hero-bar" aria-hidden="true">
+                      <span class="live-hero-bar-fill" id="live-hero-bar-fill"></span>
+                    </div>
+                    <span class="live-hero-time" id="live-hero-time-end"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="live-pluto-bottom">
+            <div class="live-pluto-toolbar">
+              <input type="search" id="live-search" placeholder="Buscar canal…" class="search-input live-pluto-search">
+            </div>
+
+            <div class="live-pluto-cats-scroll" id="live-pluto-cats-scroll"></div>
+
+            <div class="live-pluto-body">
+              <aside class="live-pluto-cats" id="live-pluto-cats" aria-label="Categorías"></aside>
+              <div class="live-pluto-guide-wrap">
+                <div class="live-pluto-guide-head">
+                  <span class="live-pluto-clock" id="live-now-time">Ahora</span>
+                  <span class="live-pluto-col-now">Ahora</span>
+                  <span class="live-pluto-col-next">A continuación</span>
+                </div>
+                <div class="live-pluto-guide" id="live-pluto-guide"></div>
+              </div>
+            </div>
+          </div>
+          <button type="button" class="live-pluto-watch sr-only" id="live-hero-watch" disabled aria-hidden="true">Ver ahora</button>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- PLAYER MODAL -->
+    <div id="player-modal" class="modal hidden">
+      <div class="player-container">
+        <button class="player-close" id="player-close" aria-label="Cerrar">✕</button>
+        <button type="button" class="player-cast-btn hidden" id="player-cast" aria-label="Enviar a Chromecast" title="Chromecast">📺</button>
+        <button type="button" class="player-cast-btn hidden" id="player-airplay" aria-label="AirPlay" title="AirPlay">&#xF8FF;</button>
+        <button class="player-fullscreen" id="player-fullscreen" aria-label="Pantalla completa">⛶</button>
+        <h3 id="player-title"></h3>
+        <div class="player-video-wrap" id="player-video-wrap">
+          <video id="video-player" playsinline webkit-playsinline x-webkit-airplay="allow" x5-playsinline x5-video-player-type="h5" preload="auto"></video>
+          <div class="player-skip-hint hidden" id="player-skip-hint"></div>
+          <div class="player-tap-zones" id="player-tap-zones">
+            <button type="button" class="player-tap-zone player-tap-back" id="player-tap-back" aria-label="Retroceder 10 segundos"></button>
+            <button type="button" class="player-tap-zone player-tap-forward" id="player-tap-forward" aria-label="Adelantar 10 segundos"></button>
+          </div>
+          <div class="player-controls" id="player-controls">
+            <div class="player-progress-wrap" id="player-progress-wrap">
+              <div class="player-progress" id="player-progress">
+                <div class="player-progress-buffer" id="player-progress-buffer"></div>
+                <div class="player-progress-played" id="player-progress-played"></div>
+                <div class="player-progress-thumb" id="player-progress-thumb"></div>
+              </div>
+            </div>
+            <div class="player-live-bar hidden" id="player-live-bar">
+              <div class="player-live-progress" aria-hidden="true"><span class="player-live-progress-fill"></span></div>
+              <span class="player-live-time" id="player-live-time">EN VIVO</span>
+            </div>
+            <div class="player-controls-row">
+              <button type="button" class="player-ctrl-btn player-live-only hidden" id="player-mute" aria-label="Activar audio">🔇</button>
+              <label class="player-volume-wrap player-live-only hidden" id="player-volume-wrap" title="Volumen">
+                <span class="sr-only">Volumen</span>
+                <input type="range" id="player-volume" class="player-volume" min="0" max="100" value="100">
+              </label>
+              <button type="button" class="player-ctrl-btn" id="player-play-pause" aria-label="Play/Pausa">▶</button>
+              <button type="button" class="player-ctrl-btn player-seek-hide-live" id="player-seek-back" aria-label="Retroceder 10 segundos">⏪ 10s</button>
+              <button type="button" class="player-ctrl-btn player-seek-hide-live" id="player-seek-forward" aria-label="Adelantar 10 segundos">10s ⏩</button>
+              <span class="player-time" id="player-time">0:00 / 0:00</span>
+            </div>
+          </div>
+        </div>
+        <div id="live-player-info" class="hidden">
+          <img id="live-channel-logo" alt="">
+          <span id="live-channel-name"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- MOBILE BOTTOM NAV -->
+    <nav class="mobile-bottom-nav" id="mobile-bottom-nav">
+      <button data-page="home" class="mob-nav-btn active"><span class="mob-icon">🏠</span><span>Inicio</span></button>
+      <button data-page="categories" class="mob-nav-btn" id="mob-nav-categories"><span class="mob-icon">📂</span><span>Categorías</span></button>
+      <button data-page="mylist" class="mob-nav-btn"><span class="mob-icon">➕</span><span>Mi lista</span></button>
+      <button data-page="movies" class="mob-nav-btn"><span class="mob-icon">🎬</span><span>Películas</span></button>
+      <button data-page="series" class="mob-nav-btn"><span class="mob-icon">📺</span><span>Series</span></button>
+      <button data-page="live" class="mob-nav-btn mob-live"><span class="mob-icon"><span class="live-dot" aria-hidden="true"></span></span><span>En Vivo</span></button>
+    </nav>
+
+    <!-- TOAST -->
+    <div id="toast" class="toast hidden"></div>
+
+    <!-- TRAILER MODAL -->
+    <div id="trailer-modal" class="modal hidden" role="dialog" aria-label="Tráiler">
+      <div class="modal-backdrop" id="trailer-modal-backdrop"></div>
+      <div class="trailer-modal-box">
+        <button type="button" class="modal-close" id="trailer-modal-close" aria-label="Cerrar">×</button>
+        <div id="trailer-modal-player"></div>
+      </div>
+    </div>
+
+    <!-- CAMBIAR CONTRASEÑA -->
+    <div id="password-modal" class="modal hidden" role="dialog" aria-labelledby="password-modal-title">
+      <div class="modal-backdrop" id="password-modal-backdrop"></div>
+      <div class="modal-box account-modal-box">
+        <button type="button" class="modal-close" id="password-modal-close" aria-label="Cerrar">×</button>
+        <h2 id="password-modal-title">Cambiar contraseña</h2>
+        <p class="modal-sub">Usuario: <strong id="password-modal-user"></strong></p>
+        <form id="password-change-form">
+          <label class="modal-label">Contraseña actual</label>
+          <input type="password" id="pwd-current" autocomplete="current-password" required>
+          <label class="modal-label">Nueva contraseña</label>
+          <input type="password" id="pwd-new" autocomplete="new-password" required minlength="4">
+          <label class="modal-label">Confirmar nueva</label>
+          <input type="password" id="pwd-new2" autocomplete="new-password" required minlength="4">
+          <p id="password-change-error" class="error-msg"></p>
+          <button type="submit" class="btn-primary">Guardar contraseña</button>
+        </form>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- BUSCADOR (fuera de #app para overlay real en TV/WebView) -->
+  <div id="search-modal" class="search-overlay hidden" role="dialog" aria-label="Buscar contenido" aria-modal="true">
+    <div class="search-overlay-backdrop" id="search-modal-backdrop"></div>
+    <div class="search-overlay-shell">
+      <div class="search-bar-card">
+        <div class="search-bar-field">
+          <svg class="search-bar-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+          <input type="search" id="global-search" class="search-bar-input tv-focusable" placeholder="Títulos, actores, canales…" autocomplete="off" aria-label="Buscar" enterkeyhint="search">
+          <button type="button" id="search-clear-btn" class="search-bar-clear hidden tv-focusable" aria-label="Borrar búsqueda">×</button>
+        </div>
+        <button type="button" class="search-overlay-close tv-focusable" id="search-modal-close" aria-label="Cerrar buscador">
+          <span>ESC</span>
+        </button>
+      </div>
+      <div id="global-search-results" class="search-results-panel" role="listbox"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
+  <script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1" async></script>
+  <script src="/js/cast.js?v=1"></script>
+  <script src="/js/app.js?v=157"></script>
+</body>
+</html>

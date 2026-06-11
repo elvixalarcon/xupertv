@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/tv_bg">
+
+    <ImageView
+        android:id="@+id/tv_detail_backdrop"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:contentDescription="@null" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/tv_detail_scrim" />
+
+    <LinearLayout
+        android:id="@+id/tv_detail_content"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:padding="22dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:paddingEnd="18dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/tv_detail_title"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:ellipsize="end"
+                        android:maxLines="2"
+                        android:textColor="@color/tv_text"
+                        android:textSize="28sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tv_detail_rating"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:textColor="#ff9f43"
+                        android:textSize="22sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tv_detail_meta"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:textColor="@color/tv_text_dim"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/tv_detail_genres"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:textColor="@color/tv_accent"
+                    android:textSize="13sp" />
+
+                <LinearLayout
+                    android:id="@+id/tv_detail_actions"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/tv_detail_play"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="12dp"
+                        android:backgroundTint="@color/tv_gold"
+                        android:focusable="true"
+                        android:minWidth="200dp"
+                        android:minHeight="56dp"
+                        android:paddingStart="28dp"
+                        android:paddingEnd="28dp"
+                        android:text="▶  REPRODUCIR"
+                        android:textAllCaps="true"
+                        android:textColor="#111111"
+                        android:textSize="17sp"
+                        android:textStyle="bold" />
+
+                    <Button
+                        android:id="@+id/tv_detail_fullscreen"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:backgroundTint="#44445a"
+                        android:focusable="true"
+                        android:minWidth="220dp"
+                        android:minHeight="56dp"
+                        android:paddingStart="24dp"
+                        android:paddingEnd="24dp"
+                        android:text="PANTALLA COMPLETA"
+                        android:textAllCaps="true"
+                        android:textColor="@color/tv_text"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <ScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:layout_marginTop="12dp"
+                    android:fillViewport="false"
+                    android:scrollbars="none">
+
+                    <TextView
+                        android:id="@+id/tv_detail_synopsis"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:lineSpacingExtra="5dp"
+                        android:textColor="@color/tv_text"
+                        android:textSize="14sp" />
+                </ScrollView>
+            </LinearLayout>
+
+            <FrameLayout
+                android:id="@+id/tv_detail_preview_wrap"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1.05"
+                android:background="@drawable/tv_poster_selector"
+                android:focusable="true"
+                android:padding="4dp">
+
+                <androidx.media3.ui.PlayerView
+                    android:id="@+id/tv_detail_preview"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    app:show_buffering="never"
+                    app:use_controller="false" />
+
+                <ImageView
+                    android:id="@+id/tv_detail_poster_fallback"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@color/tv_card"
+                    android:scaleType="centerCrop"
+                    android:contentDescription="@null" />
+            </FrameLayout>
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:paddingBottom="6dp"
+            android:text="Quizás te guste"
+            android:textColor="@color/tv_text"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/tv_detail_similar"
+            android:layout_width="match_parent"
+            android:layout_height="200dp"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:descendantFocusability="afterDescendants"
+            android:focusable="true" />
+    </LinearLayout>
+
+    <ProgressBar
+        android:id="@+id/tv_detail_loading"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:visibility="gone" />
+</FrameLayout>

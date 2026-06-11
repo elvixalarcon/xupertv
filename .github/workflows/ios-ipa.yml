@@ -1,0 +1,48 @@
+# Compila IPA sin firmar en macOS (gratis en GitHub Actions).
+# El IPA se publica como artefacto; súbelo a data/ipa/ en el servidor para /ipa/ios
+name: iOS IPA (unsigned)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - 'ios/**'
+      - 'public/**'
+      - 'capacitor.config.json'
+      - 'package.json'
+      - '.github/workflows/ios-ipa.yml'
+
+jobs:
+  build-ipa:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Capacitor sync iOS
+        run: npx cap sync ios
+
+      - name: CocoaPods
+        run: |
+          cd ios/App
+          pod install
+
+      - name: Build unsigned IPA
+        run: |
+          chmod +x ios/build-ipa-unsigned.sh
+          ios/build-ipa-unsigned.sh
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VixTV-unsigned-ipa
+          path: data/ipa/VixTV.ipa
+          retention-days: 30

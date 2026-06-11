@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/tv_bg"
+    android:baselineAligned="false"
+    android:clipChildren="false"
+    android:clipToPadding="false"
+    android:orientation="horizontal">
+
+    <LinearLayout
+        android:id="@+id/tv_search_left"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="0.26"
+        android:background="@color/tv_sidebar"
+        android:clipChildren="false"
+        android:gravity="top|center_horizontal"
+        android:orientation="vertical"
+        android:paddingStart="14dp"
+        android:paddingTop="16dp"
+        android:paddingEnd="10dp"
+        android:paddingBottom="12dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:lineSpacingExtra="2dp"
+            android:text="Buscar películas, series y canales"
+            android:textColor="@color/tv_text_dim"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/tv_search_input"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/tv_search_input_bg"
+            android:ellipsize="end"
+            android:hint="Escribe aquí…"
+            android:maxLines="1"
+            android:minHeight="36dp"
+            android:paddingStart="10dp"
+            android:paddingTop="8dp"
+            android:paddingEnd="10dp"
+            android:paddingBottom="8dp"
+            android:textColor="@color/tv_text"
+            android:textColorHint="@color/tv_text_dim"
+            android:textSize="14sp" />
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/tv_keyboard_panel_bg"
+            android:padding="6dp">
+
+            <GridLayout
+                android:id="@+id/tv_search_keyboard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:alignmentMode="alignBounds"
+                android:columnCount="8"
+                android:nextFocusRight="@+id/tv_search_results"
+                android:useDefaultMargins="false" />
+        </FrameLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="0.74"
+        android:clipChildren="false"
+        android:orientation="vertical"
+        android:paddingStart="10dp"
+        android:paddingTop="20dp"
+        android:paddingEnd="20dp"
+        android:paddingBottom="16dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tv_search_heading"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Búsqueda popular"
+                android:textColor="@color/tv_text"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tv_search_refresh"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="14dp"
+                android:background="@drawable/tv_keyboard_key_bg"
+                android:focusable="true"
+                android:paddingStart="14dp"
+                android:paddingTop="6dp"
+                android:paddingEnd="14dp"
+                android:paddingBottom="6dp"
+                android:text="Actualizar"
+                android:textColor="@color/tv_text"
+                android:textSize="13sp" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <TextView
+                android:id="@+id/tv_search_total"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Total: 0"
+                android:textColor="@color/tv_gold"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="12dp"
+            android:layout_weight="1"
+            android:clipChildren="false">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/tv_search_results"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                android:nextFocusLeft="@+id/tv_search_keyboard"
+                android:paddingTop="4dp"
+                android:paddingBottom="8dp" />
+
+            <ProgressBar
+                android:id="@+id/tv_search_loading"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/tv_search_empty"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:gravity="center"
+                android:text="Escribe para buscar"
+                android:textColor="@color/tv_text_dim"
+                android:textSize="15sp"
+                android:visibility="gone" />
+        </FrameLayout>
+    </LinearLayout>
+</LinearLayout>

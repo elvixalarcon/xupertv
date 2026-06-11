@@ -1,0 +1,236 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/tv_bg"
+    android:clipChildren="false"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:id="@+id/tv_top_bar"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:background="@color/tv_sidebar"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingEnd="20dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="VIX"
+            android:textColor="@color/tv_gold"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=" TV"
+            android:textColor="@color/tv_text"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <ImageButton
+            android:id="@+id/tv_top_search"
+            style="@style/TvTopIcon"
+            android:contentDescription="Buscar"
+            android:src="@drawable/ic_tv_search" />
+
+        <ImageButton
+            android:id="@+id/tv_top_filter"
+            style="@style/TvTopIcon"
+            android:contentDescription="Funciones"
+            android:src="@drawable/ic_tv_filter" />
+
+        <ImageButton
+            android:id="@+id/tv_top_history"
+            style="@style/TvTopIcon"
+            android:contentDescription="Historia"
+            android:src="@drawable/ic_tv_history" />
+
+        <ImageButton
+            android:id="@+id/tv_top_profile"
+            style="@style/TvTopIcon"
+            android:contentDescription="Perfil"
+            android:src="@drawable/ic_tv_profile" />
+
+        <FrameLayout
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="4dp">
+
+            <ImageButton
+                android:id="@+id/tv_top_notify"
+                style="@style/TvTopIcon"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:contentDescription="Notificaciones"
+                android:src="@drawable/ic_tv_notify" />
+
+            <TextView
+                android:id="@+id/tv_notify_badge"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:layout_gravity="top|end"
+                android:background="@drawable/tv_badge_circle"
+                android:gravity="center"
+                android:textColor="@color/tv_text"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+        </FrameLayout>
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="24dp"
+            android:layout_marginStart="10dp"
+            android:layout_marginEnd="10dp"
+            android:background="#44ffffff" />
+
+        <ImageView
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:contentDescription="@null"
+            android:src="@drawable/ic_tv_wifi"
+            android:tint="@color/tv_text" />
+
+        <TextView
+            android:id="@+id/tv_clock"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:textColor="@color/tv_text"
+            android:textSize="16sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipChildren="false"
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:layout_width="168dp"
+            android:layout_height="match_parent"
+            android:background="@color/tv_sidebar"
+            android:clipChildren="false"
+            android:orientation="vertical">
+
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:fillViewport="true"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:id="@+id/tv_sidebar"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:clipChildren="false"
+                    android:clipToPadding="false"
+                    android:orientation="vertical"
+                    android:paddingTop="8dp"
+                    android:paddingBottom="4dp">
+
+                    <TextView
+                        android:id="@+id/tv_nav_home"
+                        style="@style/TvNavItem"
+                        android:nextFocusRight="@+id/tv_catalog_list"
+                        android:nextFocusDown="@+id/tv_nav_live"
+                        android:drawablePadding="10dp"
+                        android:text="INICIO" />
+
+                    <TextView
+                        android:id="@+id/tv_nav_live"
+                        style="@style/TvNavItem"
+                        android:nextFocusRight="@+id/tv_live_player_wrap"
+                        android:nextFocusUp="@+id/tv_nav_home"
+                        android:nextFocusDown="@+id/tv_nav_destacados"
+                        android:drawablePadding="10dp"
+                        android:text="TV" />
+
+                    <TextView
+                        android:id="@+id/tv_nav_destacados"
+                        style="@style/TvNavItem"
+                        android:nextFocusRight="@+id/tv_catalog_list"
+                        android:nextFocusUp="@+id/tv_nav_live"
+                        android:nextFocusDown="@+id/tv_nav_movies"
+                        android:drawablePadding="10dp"
+                        android:text="DESTACADOS" />
+
+                    <TextView
+                        android:id="@+id/tv_nav_movies"
+                        style="@style/TvNavItem"
+                        android:nextFocusRight="@+id/tv_catalog_list"
+                        android:nextFocusUp="@+id/tv_nav_destacados"
+                        android:nextFocusDown="@+id/tv_nav_series"
+                        android:drawablePadding="10dp"
+                        android:text="PELÍCULA" />
+
+                    <TextView
+                        android:id="@+id/tv_nav_series"
+                        style="@style/TvNavItem"
+                        android:nextFocusRight="@+id/tv_catalog_list"
+                        android:nextFocusUp="@+id/tv_nav_movies"
+                        android:nextFocusDown="@+id/tv_nav_kids"
+                        android:drawablePadding="10dp"
+                        android:text="SERIES" />
+
+                    <TextView
+                        android:id="@+id/tv_nav_kids"
+                        style="@style/TvNavItem"
+                        android:nextFocusRight="@+id/tv_catalog_list"
+                        android:nextFocusUp="@+id/tv_nav_series"
+                        android:nextFocusDown="@+id/tv_nav_anime"
+                        android:drawablePadding="10dp"
+                        android:text="KIDS" />
+
+                    <TextView
+                        android:id="@+id/tv_nav_anime"
+                        style="@style/TvNavItem"
+                        android:nextFocusRight="@+id/tv_catalog_list"
+                        android:nextFocusUp="@+id/tv_nav_kids"
+                        android:nextFocusDown="@+id/tv_nav_explore"
+                        android:drawablePadding="10dp"
+                        android:text="ANIME" />
+
+                    <TextView
+                        android:id="@+id/tv_nav_explore"
+                        style="@style/TvNavItem"
+                        android:nextFocusRight="@+id/tv_catalog_list"
+                        android:nextFocusUp="@+id/tv_nav_anime"
+                        android:drawablePadding="10dp"
+                        android:text="EXPLORAR" />
+                </LinearLayout>
+            </ScrollView>
+        </LinearLayout>
+
+        <FrameLayout
+            android:id="@+id/tv_content"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="@color/tv_panel"
+            android:clipChildren="false">
+
+            <include
+                android:id="@+id/panel_live"
+                layout="@layout/panel_tv_live"
+                android:visibility="gone" />
+
+            <include
+                android:id="@+id/panel_catalog"
+                layout="@layout/panel_tv_catalog"
+                android:visibility="visible" />
+        </FrameLayout>
+    </LinearLayout>
+</LinearLayout>

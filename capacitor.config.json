@@ -1,0 +1,18 @@
+{
+  "appId": "tv.vix.app",
+  "appName": "Vix TV",
+  "webDir": "public",
+  "server": {
+    "url": "https://tv.vixred.com",
+    "cleartext": true,
+    "androidScheme": "https"
+  },
+  "ios": {
+    "contentInset": "automatic",
+    "allowsLinkPreview": false,
+    "scrollEnabled": false
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}

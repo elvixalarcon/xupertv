@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/tv_bg"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="48dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="VIX"
+        android:textColor="@color/tv_gold"
+        android:textSize="42sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text=" TV"
+        android:textColor="@color/tv_text"
+        android:textSize="42sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="36dp"
+        android:text="Entretenimiento para tu Android TV"
+        android:textColor="@color/tv_text_dim"
+        android:textSize="16sp" />
+
+    <EditText
+        android:id="@+id/tv_login_user"
+        android:layout_width="420dp"
+        android:layout_height="wrap_content"
+        android:background="@color/tv_card"
+        android:hint="@string/native_login_user_hint"
+        android:inputType="text"
+        android:padding="16dp"
+        android:textColor="@color/tv_text"
+        android:textColorHint="@color/tv_text_dim" />
+
+    <EditText
+        android:id="@+id/tv_login_pass"
+        android:layout_width="420dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:background="@color/tv_card"
+        android:hint="@string/native_login_pass_hint"
+        android:inputType="textPassword"
+        android:padding="16dp"
+        android:textColor="@color/tv_text"
+        android:textColorHint="@color/tv_text_dim" />
+
+    <Button
+        android:id="@+id/tv_login_btn"
+        android:layout_width="420dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:backgroundTint="@color/tv_accent"
+        android:text="@string/native_login_btn"
+        android:textColor="@color/tv_text"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/tv_login_error"
+        android:layout_width="420dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:gravity="center"
+        android:textColor="#ff4757"
+        android:textSize="14sp" />
+
+    <TextView
+        android:id="@+id/tv_login_server"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
+
+    <Button
+        android:id="@+id/tv_login_settings"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
+</LinearLayout>

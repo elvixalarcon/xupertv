@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/tv_bg"
+    android:fillViewport="true"
+    android:padding="28dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="FUNCIONES MÁS UTILIZADAS"
+            android:textColor="@color/tv_text"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <GridLayout
+            android:id="@+id/tv_functions_grid"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:columnCount="5"
+            android:useDefaultMargins="true" />
+    </LinearLayout>
+</ScrollView>

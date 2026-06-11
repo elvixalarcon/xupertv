@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#6366f1">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <title>Vix TV Panel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/admin.css?v=13">
+  <link rel="stylesheet" href="/css/admin-vix.css?v=19">
+</head>
+<body class="admin-portal vix-panel">
+  <div id="admin-login-screen" class="admin-screen active">
+    <div class="vp-login">
+      <div>
+        <div class="vp-login-card">
+          <div class="vp-login-brand">
+            <strong>Vix TV</strong>
+            <span>Panel de administración</span>
+          </div>
+          <form id="admin-login-form">
+            <div class="form-group">
+              <label for="admin-login-user">Usuario</label>
+              <input type="text" id="admin-login-user" autocomplete="username" required>
+            </div>
+            <div class="form-group">
+              <label for="admin-login-pass">Contraseña</label>
+              <input type="password" id="admin-login-pass" autocomplete="current-password" required>
+            </div>
+            <button type="submit" class="vp-btn-login" id="login_button">Entrar</button>
+            <p id="admin-login-error" class="admin-login-error"></p>
+          </form>
+        </div>
+        <p class="admin-login-back"><a href="/">← Volver a Vix TV</a></p>
+      </div>
+    </div>
+  </div>
+
+  <div id="admin-app" class="admin-screen">
+    <aside class="vp-sidebar" id="vp-sidebar">
+      <div class="vp-brand">Vix TV<span>Panel Admin</span></div>
+      <nav class="vp-nav">
+        <div class="vp-nav-group">
+          <div class="vp-nav-label">General</div>
+          <a href="#dashboard" class="vp-nav-link active" data-section="dashboard"><span class="ico">📊</span> Dashboard</a>
+          <a href="#connections" class="vp-nav-link" data-section="connections"><span class="ico">🔴</span> Conexiones en vivo</a>
+        </div>
+        <div class="vp-nav-group">
+          <div class="vp-nav-label">Servidor</div>
+          <a href="#servers" class="vp-nav-link" data-section="servers"><span class="ico">🖥</span> Servidor Vix TV</a>
+        </div>
+        <div class="vp-nav-group">
+          <div class="vp-nav-label">Clientes</div>
+          <a href="#lines" class="vp-nav-link" data-section="lines"><span class="ico">👤</span> Líneas</a>
+        </div>
+        <div class="vp-nav-group">
+          <div class="vp-nav-label">Contenido</div>
+          <a href="#streams" class="vp-nav-link" data-section="streams"><span class="ico">📡</span> Streams</a>
+          <a href="#vod" class="vp-nav-link" data-section="vod"><span class="ico">🎬</span> Películas</a>
+          <a href="#series" class="vp-nav-link" data-section="series"><span class="ico">📺</span> Series</a>
+        </div>
+        <div class="vp-nav-group">
+          <div class="vp-nav-label">Gestión</div>
+          <a href="#categories" class="vp-nav-link" data-section="categories"><span class="ico">📁</span> Categorías</a>
+          <a href="#settings" class="vp-nav-link" data-section="settings"><span class="ico">⚙</span> Ajustes</a>
+        </div>
+      </nav>
+      <div class="vp-sidebar-foot"><a href="/">← Volver al sitio</a></div>
+    </aside>
+
+    <div class="vp-shell">
+      <header class="vp-header">
+        <button type="button" class="vp-menu-toggle" id="vp-menu-toggle" aria-label="Menú">☰</button>
+        <h1 class="vp-page-title" id="vp-page-title">Inicio</h1>
+        <div class="vp-header-user">
+          <span id="admin-user-name" class="vp-user-name"></span>
+          <button type="button" id="admin-goto-password" class="vp-btn-ghost-sm">Contraseña</button>
+          <button id="admin-logout-btn" type="button" class="vp-btn-logout">Salir</button>
+        </div>
+      </header>
+
+      <main class="vp-main">
+        <div class="vp-content">
+
+        <div id="xui-dashboard" class="xui-section active">
+          <div class="xui-dash-head">
+            <h2 class="xui-dash-title">Dashboard</h2>
+            <select class="xui-dash-server-select" id="xui-dash-server" title="Servidor Vix TV">
+              <option value="all">Todos los servidores</option>
+            </select>
+          </div>
+
+          <div class="xui-dash-tiles" id="xui-dash-tiles"></div>
+
+          <div class="xui-panel-box xui-restream-panel" id="xui-restream-panel">
+            <div class="xui-panel-header xui-restream-head">
+              <div class="xui-restream-head-main">
+                <h3>Restream · importación <span class="badge" id="xui-restream-count">0</span></h3>
+                <span class="xui-restream-totals">
+                  Import total: <strong id="xui-restream-import-total">0.00</strong> Mbps ·
+                  Salida: <strong id="xui-restream-output-total">0.00</strong> Mbps
+                </span>
+              </div>
+              <div class="xui-restream-actions">
+                <button type="button" class="xui-btn xui-btn-success xui-btn-sm" id="xui-relay-enable-all" title="Activa Allow Recording y cache en todos los canales habilitados">Activar en todos</button>
+                <button type="button" class="xui-btn xui-btn-primary xui-btn-sm" id="xui-relay-start-all" title="Inicia FFmpeg en todos los canales con restream activado (por lotes)">Iniciar procesos</button>
+                <button type="button" class="xui-btn xui-btn-danger xui-btn-sm" id="xui-relay-disable-all" title="Apaga restream y Allow Recording en todos los canales">Desactivar todos</button>
+              </div>
+            </div>
+            <div class="xui-table-wrap">
+              <table class="xui-table xui-restream-table">
+                <thead>
+                  <tr>
+                    <th>Canal</th><th>Categoría</th><th>Estado</th><th>Import</th><th>Salida</th><th>Buffer</th><th>Uptime</th>
+                  </tr>
+                </thead>
+                <tbody id="xui-restream-table"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="xui-dash-charts-row">
+            <div class="xui-panel-box xui-dash-chart-panel">
+              <div class="xui-panel-header"><h3>CPU y memoria</h3></div>
+              <div class="xui-panel-body xui-chart-wrap"><canvas id="xui-chart-cpu"></canvas></div>
+            </div>
+            <div class="xui-panel-box xui-dash-chart-panel">
+              <div class="xui-panel-header"><h3>Tráfico de red</h3></div>
+              <div class="xui-panel-body xui-chart-wrap"><canvas id="xui-chart-net"></canvas></div>
+            </div>
+          </div>
+
+          <div class="xui-panel-box xui-dash-chart-panel xui-dash-chart-wide">
+            <div class="xui-panel-header"><h3>Canales y usuarios</h3></div>
+            <div class="xui-panel-body xui-chart-wrap"><canvas id="xui-chart-conn"></canvas></div>
+          </div>
+
+          <div class="xui-panel-box">
+            <div class="xui-panel-header"><h3>Acciones rápidas</h3></div>
+            <div class="xui-panel-body xui-quick-actions">
+              <button class="xui-btn xui-btn-primary" onclick="AdminPanel.go('streams');AdminPanel.openChannelModal()">+ Stream</button>
+              <button class="xui-btn xui-btn-success" onclick="AdminPanel.go('vod');AdminPanel.openVodModal()">+ Película</button>
+              <button class="xui-btn xui-btn-primary" onclick="AdminPanel.go('series');AdminPanel.openSeriesModal()">+ Serie</button>
+              <button class="xui-btn xui-btn-ghost" onclick="AdminPanel.go('streams')">Importar M3U</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="xui-connections" class="xui-section">
+          <p class="vp-section-desc">Usuarios conectados ahora mismo en Vix TV</p>
+          <div class="xui-panel-box xui-activity-panel">
+            <div class="xui-panel-header">
+              <h3>Conexiones en vivo <span class="badge" id="xui-active-count">0</span></h3>
+              <span class="xui-activity-hint" id="xui-activity-updated">—</span>
+            </div>
+            <div class="xui-table-wrap">
+              <table class="xui-table xui-activity-table">
+                <thead>
+                  <tr>
+                    <th>Usuario / Línea</th><th>Estado</th><th>Viendo</th><th>Progreso</th><th>Última actividad</th>
+                  </tr>
+                </thead>
+                <tbody id="xui-activity-table"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div id="xui-servers" class="xui-section">
+          <p class="vp-section-desc">Estado del servidor donde corre Vix TV (CPU, RAM, disco, red)</p>
+          <div class="xui-panel-box">
+            <div class="xui-panel-header">
+              <h3>Servidor Vix TV <span class="badge" id="xui-servers-count">1</span></h3>
+              <span class="xui-activity-hint" id="xui-servers-updated">—</span>
+            </div>
+            <div class="xui-table-wrap">
+              <table class="xui-table">
+                <thead>
+                  <tr><th>ID</th><th>Host</th><th>CPU</th><th>RAM</th><th>Carga</th><th>Disco</th><th>Uptime</th><th>Online</th></tr>
+                </thead>
+                <tbody id="xui-servers-table"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div id="xui-streams" class="xui-section">
+          <p class="vp-section-desc">Canales en vivo de Vix TV</p>
+          <div class="xui-streams-page">
+            <div class="xui-streams-head">
+              <h2 class="xui-streams-title">Streams</h2>
+              <div class="xui-streams-head-actions">
+                <button class="xui-btn xui-btn-primary" id="xui-add-stream">+ Nuevo canal</button>
+                <button type="button" class="xui-btn xui-btn-warning xui-btn-icon" onclick="AdminPanel.syncLogosFromXui()" title="Importar logos XUI">🖼</button>
+                <button type="button" class="xui-btn xui-btn-ghost xui-btn-icon" onclick="AdminPanel.loadStreams()" title="Refrescar">⟳</button>
+              </div>
+            </div>
+            <div class="xui-streams-filters">
+              <input type="search" id="xui-streams-search" class="xui-streams-filter" placeholder="Buscar canal…">
+              <select id="xui-streams-filter-cat" class="xui-streams-filter"><option value="">Todas las categorías</option></select>
+              <select id="xui-streams-filter-status" class="xui-streams-filter">
+                <option value="">Todos los estados</option>
+                <option value="up">En línea</option>
+                <option value="down">Caído</option>
+                <option value="unknown">Desconocido</option>
+                <option value="live-on">Activos en plataforma</option>
+                <option value="live-off">Desactivados (OFF)</option>
+              </select>
+            </div>
+            <div id="xui-streams-filter-banner" class="xui-streams-filter-banner hidden" aria-live="polite"></div>
+            <div class="xui-table-wrap xui-streams-table-wrap">
+              <table class="xui-table xui-streams-xui">
+                <thead>
+                  <tr>
+                    <th>ID</th><th>Icono</th><th>Nombre</th><th>En Vivo</th><th>Servidores</th><th>Import</th><th>Salida</th><th>Tiempo restream</th>
+                    <th>Estado</th><th>Acciones</th><th>Player</th><th>EPG</th><th>Info</th>
+                  </tr>
+                </thead>
+                <tbody id="xui-streams-table"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="xui-panel-box" style="margin-top:20px">
+            <div class="xui-panel-header"><h3>Importar lista M3U</h3></div>
+            <div class="xui-panel-body">
+              <div class="xui-form-grid">
+                <div class="xui-field"><label>Nombre de la lista</label><input type="text" id="xui-m3u-name" placeholder="Mi lista IPTV"></div>
+                <div class="xui-field"><label>URL del archivo M3U</label><input type="url" id="xui-m3u-url" placeholder="http://.../lista.m3u"></div>
+                <div class="xui-field" style="display:flex;align-items:flex-end"><button class="xui-btn xui-btn-success" id="xui-import-m3u">Importar canales</button></div>
+              </div>
+            </div>
+          </div>
+          <div class="xui-panel-box">
+            <div class="xui-panel-header"><h3>Listas M3U importadas</h3></div>
+            <div class="xui-table-wrap"><table class="xui-table"><thead><tr><th>ID</th><th>Nombre</th><th>Canales</th><th>URL</th><th>Acciones</th></tr></thead><tbody id="xui-playlists-table"></tbody></table></div>
+          </div>
+        </div>
+        <div id="xui-categories" class="xui-section">
+          <p class="vp-section-desc">Categorías de streams — equivalente a <strong>Management → Categories</strong> en XUI ONE</p>
+                <div class="xui-panel-box">
+                  <div class="xui-panel-header">
+                    <h3>Categorías — <span id="xui-categories-type-label">Películas</span></h3>
+                    <button class="xui-btn xui-btn-primary" id="xui-add-category">+ Nueva categoría</button>
+                  </div>
+                  <div class="xui-panel-body" style="margin-bottom:16px">
+                    <div class="xui-cat-tabs">
+                      <button type="button" class="xui-cat-tab active" data-cat-type="movie">🎬 Películas</button>
+                      <button type="button" class="xui-cat-tab" data-cat-type="series">📺 Series</button>
+                      <button type="button" class="xui-cat-tab" data-cat-type="live">📡 Canales</button>
+                    </div>
+                  </div>
+                  <div class="xui-table-wrap"><table class="xui-table"><thead><tr><th>Categoría</th><th>Elementos</th><th>Acciones</th></tr></thead><tbody id="xui-categories-table"></tbody></table></div>
+                </div>
+              </div>
+              <div id="xui-vod" class="xui-section">
+                <p class="vp-section-desc">Películas VOD — equivalente a <strong>Content → Movies</strong> en XUI ONE</p>
+                <div class="xui-panel-box">
+                  <div class="xui-panel-header"><h3>Películas VOD</h3>
+                    <button type="button" class="xui-btn xui-btn-success" id="xui-resume-vod-stuck">⬇ Descargar todas las pendientes</button>
+                    <button class="xui-btn xui-btn-primary" id="xui-add-vod">+ Nueva película</button>
+                  </div>
+                  <div class="xui-table-wrap"><table class="xui-table"><thead><tr><th>ID</th><th>Poster</th><th>Título</th><th>Género</th><th>Año</th><th>Calidad</th><th>Estado</th><th>★</th><th>Video</th><th>Acciones</th></tr></thead><tbody id="xui-vod-table"></tbody></table></div>
+                </div>
+              </div>
+              <div id="xui-series" class="xui-section">
+                <p class="vp-section-desc">Series y capítulos — equivalente a <strong>Content → Series / Episodes</strong> en XUI ONE</p>
+                <div class="xui-panel-header" style="margin-bottom:16px"><h3>Series</h3><button class="xui-btn xui-btn-primary" id="xui-add-series">+ Nueva serie</button></div>
+                <p class="xui-series-hint">Pulsa una serie para ver capítulos y el <strong>progreso de descarga</strong>. Usa <strong>AllCalidad</strong> o <strong>Descargar capítulos</strong> para bajar los pendientes. El slug se guarda en Editar serie (ej: <code>from-2022</code>).</p>
+                <div id="xui-series-list" class="xui-series-accordion"></div>
+              </div>
+
+        <div id="xui-lines" class="xui-section">
+          <p class="vp-section-desc">Cuentas de acceso al servicio Vix TV (equivalente a <strong>Lines → Manage Lines</strong> en XUI ONE)</p>
+          <div class="xui-panel-box" style="margin-bottom:16px">
+            <div class="xui-panel-header"><h3>Mi contraseña</h3></div>
+            <div class="xui-panel-body">
+              <div class="xui-form-grid">
+                <div class="xui-field"><label>Contraseña actual</label><input type="password" id="xui-admin-cur-pass" autocomplete="current-password"></div>
+                <div class="xui-field"><label>Nueva contraseña</label><input type="password" id="xui-admin-new-pass" autocomplete="new-password"></div>
+                <div class="xui-field"><label>Confirmar nueva</label><input type="password" id="xui-admin-new-pass2" autocomplete="new-password"></div>
+                <div class="xui-field" style="display:flex;align-items:flex-end"><button type="button" class="xui-btn xui-btn-primary" id="xui-admin-change-pass">Cambiar mi contraseña</button></div>
+              </div>
+            </div>
+          </div>
+          <div class="xui-panel-box" style="margin-bottom:16px">
+            <div class="xui-panel-header"><h3>Crear línea</h3></div>
+            <div class="xui-panel-body">
+              <div class="xui-form-grid">
+                <div class="xui-field"><label>Usuario</label><input type="text" id="xui-new-user"></div>
+                <div class="xui-field"><label>Contraseña</label><input type="password" id="xui-new-pass"></div>
+                <div class="xui-field"><label>Vigencia</label><select id="xui-new-expiry"><option value="never">Sin expiración</option><option value="30d">30 días</option></select></div>
+                <div class="xui-field"><label>Rol</label><select id="xui-new-role"><option value="user">Usuario</option></select></div>
+                <div class="xui-field full"><label>Acceso al contenido</label>
+                  <div class="xui-check-row">
+                    <label><input type="checkbox" id="xui-new-live" checked> TV en vivo</label>
+                    <label><input type="checkbox" id="xui-new-movies" checked> Películas</label>
+                    <label><input type="checkbox" id="xui-new-series" checked> Series</label>
+                  </div>
+                </div>
+                <div class="xui-field" style="display:flex;align-items:flex-end"><button class="xui-btn xui-btn-primary" id="xui-add-user">Crear línea</button></div>
+              </div>
+            </div>
+          </div>
+          <div class="xui-panel-box">
+            <div class="xui-panel-header"><h3>Líneas registradas</h3></div>
+            <div class="xui-table-wrap"><table class="xui-table"><thead><tr><th>ID</th><th>Usuario</th><th>Vigencia</th><th>Acceso</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="xui-users-table"></tbody></table></div>
+          </div>
+        </div>
+
+        <div id="xui-settings" class="xui-section xui-section--settings">
+          <section class="vod-hub" aria-label="Buscador VOD">
+            <header class="vod-hub__hero">
+              <div class="vod-hub__hero-left">
+                <span class="vod-hub__hero-icon" aria-hidden="true">▶</span>
+                <div>
+                  <h2 class="vod-hub__title">Buscar y descargar</h2>
+                  <p class="vod-hub__subtitle">Películas y series · por nombre o URL · elige fuente, calidad y página de origen</p>
+                </div>
+              </div>
+              <span class="vod-hub__hero-badge">VOD</span>
+            </header>
+            <div class="vod-hub__body">
+              <label class="vod-hub__field-label" for="vod-search-query">Título, serie o enlace</label>
+              <div class="vod-hub__search-row">
+                <div class="vod-hub__input-wrap">
+                  <span class="vod-hub__input-icon" aria-hidden="true">🔍</span>
+                  <input type="text" id="vod-search-query" class="vod-hub__input" placeholder="Ej: From 2022 · Superman 2025 · https://allcalidad.re/tvshows/from-2022/" autocomplete="off">
+                </div>
+                <button type="button" class="vod-hub__search-btn" id="vod-search-btn">
+                  <span class="vod-hub__search-btn-text">Buscar ahora</span>
+                </button>
+              </div>
+              <div class="vod-hub__options">
+                <div class="vod-hub__option-card">
+                  <div class="vod-hub__option-head">
+                    <span class="vod-hub__option-emoji">🌐</span>
+                    <span class="vod-hub__option-title">Fuente de búsqueda</span>
+                  </div>
+                  <select id="vod-search-source" class="vod-hub__select">
+                    <option value="all">Todo internet (+ Cinecalidad, Cuevana y AllCalidad)</option>
+                    <option value="cinecalidad">Cinecalidad — películas HD</option>
+                    <option value="cuevana">Cuevana 3 — películas</option>
+                    <option value="allcalidad">AllCalidad — películas y series</option>
+                  </select>
+                </div>
+                <div class="vod-hub__option-card">
+                  <div class="vod-hub__option-head">
+                    <span class="vod-hub__option-emoji">🎬</span>
+                    <span class="vod-hub__option-title">Calidades al buscar</span>
+                  </div>
+                  <select id="vod-search-quality-mode" class="vod-hub__select">
+                    <option value="probe_all" selected>Todas — detectar máximo disponible por enlace</option>
+                    <option value="fast">Rápida — sin comprobar calidad</option>
+                  </select>
+                  <p class="vod-hub__option-hint">Al pulsar <strong>Descargar</strong> en cada resultado eliges la calidad (4K, 1080p, 720p…).</p>
+                </div>
+              </div>
+              <p id="vod-search-status" class="vod-hub__status" role="status"></p>
+              <div id="vod-search-results" class="vod-hub__results"></div>
+            </div>
+          </section>
+
+          <div class="xui-panel-box">
+            <div class="xui-panel-header"><h3>TMDB — Posters oficiales</h3></div>
+            <div class="xui-panel-body">
+              <p class="xui-muted-text">
+                Obtén posters reales de películas y series desde
+                <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">themoviedb.org</a>
+                (registro gratuito → API → solicitar clave).
+              </p>
+              <div class="xui-form-grid">
+                <div class="xui-field full">
+                  <label>Clave API TMDB</label>
+                  <input type="password" id="xui-tmdb-key" placeholder="Pega tu API Key" autocomplete="off">
+                </div>
+              </div>
+              <p id="xui-tmdb-status" class="xui-muted-text"></p>
+              <div class="xui-quick-actions">
+                <button class="xui-btn xui-btn-primary" id="xui-save-tmdb">Guardar clave</button>
+                <button class="xui-btn xui-btn-ghost" id="xui-test-tmdb">Probar conexión</button>
+                <button class="xui-btn xui-btn-success" id="xui-refresh-posters">Actualizar posters</button>
+                <button class="xui-btn xui-btn-success" id="xui-refresh-trailers">Importar tráilers TMDB</button>
+              </div>
+            </div>
+          </div>
+          <div class="xui-panel-box">
+            <div class="xui-panel-header"><h3>Descargas automáticas VOD (Cuevana + AllCalidad)</h3></div>
+            <div class="xui-panel-body">
+              <p class="xui-muted-text">
+                Cada noche a las <strong>2:00 AM hora Ecuador</strong> busca estrenos nuevos (2024–2026) y descarga hasta
+                <span id="vod-nightly-limit-label">2</span> películas por fuente. Puedes pausar sin desactivar.
+              </p>
+              <p id="vod-nightly-ec-now" class="xui-muted-text"></p>
+              <p id="vod-nightly-status" class="xui-muted-text"></p>
+              <div class="xui-form-grid">
+                <div class="xui-field full">
+                  <label><input type="checkbox" id="vod-nightly-enabled" checked> Automatización activa</label>
+                </div>
+                <div class="xui-field full">
+                  <label><input type="checkbox" id="vod-nightly-paused"> Pausar descargas nocturnas</label>
+                </div>
+                <div class="xui-field">
+                  <label><input type="checkbox" id="vod-nightly-cuevana" checked> Incluir Cuevana 3</label>
+                </div>
+                <div class="xui-field">
+                  <label><input type="checkbox" id="vod-nightly-allcalidad" checked> Incluir AllCalidad</label>
+                </div>
+                <div class="xui-field">
+                  <label>Años (estrenos)</label>
+                  <input type="text" id="vod-nightly-years" value="2026,2025,2024" placeholder="2026,2025,2024">
+                </div>
+                <div class="xui-field">
+                  <label>Máx. descargas / fuente / noche</label>
+                  <input type="number" id="vod-nightly-limit" min="0" max="10" value="2">
+                </div>
+                <div class="xui-field">
+                  <label>Hora Ecuador</label>
+                  <input type="number" id="vod-nightly-hour" min="0" max="23" value="2">
+                </div>
+                <div class="xui-field">
+                  <label>Minuto</label>
+                  <input type="number" id="vod-nightly-minute" min="0" max="59" value="0">
+                </div>
+              </div>
+              <pre id="vod-nightly-last" class="xui-muted-text" style="font-size:.75rem;max-height:120px;overflow:auto;white-space:pre-wrap"></pre>
+              <div class="xui-quick-actions">
+                <button type="button" class="xui-btn xui-btn-primary" id="vod-nightly-save">Guardar</button>
+                <button type="button" class="xui-btn xui-btn-success" id="vod-nightly-run">Ejecutar ahora</button>
+              </div>
+            </div>
+          </div>
+          <div class="xui-panel-box">
+            <div class="xui-panel-header"><h3>App Android — Actualizaciones</h3></div>
+            <div class="xui-panel-body">
+              <p class="xui-muted-text">
+                Las películas <strong>no van dentro del APK</strong>: la app es un reproductor web que se conecta a tu servidor.
+                Cuando cambias la web o el catálogo, los usuarios lo ven al instante. Solo hay que actualizar el APK cuando
+                cambias código nativo (notificaciones, TV, etc.). Sube los APK a <code>data/apk/</code> y sube el
+                <strong>version code</strong> solo de la app que cambiaste (móvil y TV por separado).
+              </p>
+              <p id="app-download-links" class="xui-muted-text"></p>
+              <p id="app-update-status" class="xui-muted-text"></p>
+              <div class="xui-form-grid">
+                <div class="xui-field">
+                  <label>Móvil — version code</label>
+                  <input type="number" id="app-mobile-version-code" min="1" value="14">
+                </div>
+                <div class="xui-field">
+                  <label>Móvil — versión</label>
+                  <input type="text" id="app-mobile-version-name" value="1.0.13" placeholder="1.0.13">
+                </div>
+                <div class="xui-field">
+                  <label>TV — version code</label>
+                  <input type="number" id="app-tv-version-code" min="1" value="14">
+                </div>
+                <div class="xui-field">
+                  <label>TV — versión</label>
+                  <input type="text" id="app-tv-version-name" value="1.0.13" placeholder="1.0.13">
+                </div>
+                <div class="xui-field full">
+                  <label>Mensaje de actualización</label>
+                  <input type="text" id="app-update-message" placeholder="Hay una nueva versión de Vix TV disponible.">
+                </div>
+                <div class="xui-field full">
+                  <label><input type="checkbox" id="app-update-force"> Actualización obligatoria (sin botón «Más tarde»)</label>
+                </div>
+              </div>
+              <div class="xui-quick-actions">
+                <button type="button" class="xui-btn xui-btn-primary" id="app-update-save">Guardar versiones</button>
+              </div>
+            </div>
+          </div>
+          <div class="xui-panel-box">
+            <div class="xui-panel-header"><h3>Proxy de streams — Ocultar IP del servidor</h3></div>
+            <div class="xui-panel-body">
+              <p class="xui-muted-text">
+                Las señales de TV por Internet bloquean la IP del servidor. Activa proxies HTTP para resolver y reproducir
+                con otra IP. Formato: una línea por proxy — <code>http://usuario:clave@host:puerto</code>
+              </p>
+              <div class="xui-form-grid">
+                <div class="xui-field full">
+                  <label><input type="checkbox" id="xui-proxy-enabled"> Usar pool de proxies para streams</label>
+                </div>
+                <div class="xui-field full">
+                  <label>Lista de proxies HTTP</label>
+                  <textarea id="xui-proxy-list" rows="5" placeholder="http://user:pass@1.2.3.4:8080&#10;http://5.6.7.8:3128"></textarea>
+                </div>
+              </div>
+              <p id="xui-proxy-status" class="xui-muted-text"></p>
+              <div class="xui-quick-actions">
+                <button class="xui-btn xui-btn-primary" id="xui-save-proxy">Guardar proxies</button>
+                <button class="xui-btn xui-btn-ghost" id="xui-test-proxy">Probar primer proxy</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        </div>
+      </main>
+      <footer class="vp-footer">
+        <span>Vix TV Panel · Administración</span>
+        <a href="/">Volver al sitio</a>
+      </footer>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <div id="xui-modal" class="xui-modal hidden">
+    <div class="xui-modal-box">
+      <div class="xui-modal-header">
+        <h3 id="xui-modal-title">Editar</h3>
+        <button class="xui-modal-close" id="xui-modal-close">✕</button>
+      </div>
+      <div class="xui-modal-body" id="xui-modal-fields"></div>
+      <div id="xui-upload-progress" class="xui-upload-progress hidden">
+        <div class="xui-upload-progress-head">
+          <span id="xui-upload-progress-label">Subiendo…</span>
+          <span id="xui-upload-progress-pct">0%</span>
+        </div>
+        <div class="xui-upload-progress-track">
+          <div id="xui-upload-progress-bar" class="xui-upload-progress-fill"></div>
+        </div>
+      </div>
+      <div class="xui-modal-footer">
+        <button class="xui-btn xui-btn-ghost" id="xui-modal-cancel">Cancelar</button>
+        <button class="xui-btn xui-btn-primary" id="xui-modal-save">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="xui-stream-editor" class="xui-modal xui-stream-modal hidden">
+    <div class="xui-modal-box xui-stream-box">
+      <div class="xui-stream-topbar">
+        <h3 id="xui-stream-title">Stream</h3>
+        <div class="xui-stream-topbar-actions">
+          <button type="button" class="xui-btn xui-btn-primary xui-btn-sm" id="xui-stream-save-top">💾 Guardar</button>
+          <button type="button" class="xui-stream-close" id="xui-stream-close">✕</button>
+        </div>
+      </div>
+      <nav class="xui-stream-tabs" id="xui-stream-tabs">
+        <button type="button" class="xui-stream-tab" data-tab="details">👤 Details</button>
+        <button type="button" class="xui-stream-tab active" data-tab="sources">⇅ Sources</button>
+        <button type="button" class="xui-stream-tab" data-tab="advanced">⚙ Advanced</button>
+        <button type="button" class="xui-stream-tab" data-tab="map">🗺 Map</button>
+        <button type="button" class="xui-stream-tab" data-tab="epg">📺 EPG</button>
+        <button type="button" class="xui-stream-tab" data-tab="rtmp">📡 RTMP Push</button>
+        <button type="button" class="xui-stream-tab" data-tab="servers">🖥 Servers</button>
+      </nav>
+      <div class="xui-stream-body" id="xui-stream-body"></div>
+      <div class="xui-stream-footer" id="xui-stream-footer"></div>
+      <div id="xui-stream-preview" class="xui-stream-preview hidden">
+        <div class="xui-stream-preview-head">
+          <div class="xui-stream-preview-labels">
+            <strong id="xui-stream-preview-title">Preview</strong>
+            <span id="xui-stream-preview-meta"></span>
+          </div>
+          <button type="button" class="xui-stream-preview-close" id="xui-stream-preview-close">✕</button>
+        </div>
+        <div class="xui-stream-preview-video-wrap">
+          <video id="xui-stream-preview-video" playsinline controls muted></video>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
+  <script src="/js/admin-boot.js?v=2"></script>
+  <script src="/js/admin.js?v=67"></script>
+</body>
+</html>

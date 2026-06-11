@@ -1,0 +1,32 @@
+node_modules/
+.env
+.env.*
+*.log
+*.mp4
+.DS_Store
+
+# Builds Android
+android/app/build/
+android/.gradle/
+android/build/
+android/local.properties
+android/keystore.properties
+android/keystore/
+*.apk
+*.aab
+
+# iOS generated
+ios/App/build/
+ios/App/Pods/
+ios/App/DerivedData/
+ios/App/App/public/
+ios/App/output/
+
+# Server runtime data (no subir al repo)
+data/
+!data/ipa/.gitkeep
+
+# IDE
+.idea/
+.vscode/
+*.swp

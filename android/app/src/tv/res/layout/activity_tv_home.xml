@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#07070d"
+    android:orientation="vertical"
+    android:padding="48dp">
+
+    <TextView
+        android:id="@+id/tv_home_user"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Vix TV"
+        android:textColor="#f5c518"
+        android:textSize="32sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="32dp"
+        android:text="Elige una sección"
+        android:textColor="#cccccc"
+        android:textSize="18sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/tv_menu_live"
+            style="@style/TvMenuButton"
+            android:layout_width="0dp"
+            android:layout_height="120dp"
+            android:layout_marginEnd="16dp"
+            android:layout_weight="1"
+            android:text="📺 En vivo"
+            android:focusable="true" />
+
+        <Button
+            android:id="@+id/tv_menu_movies"
+            style="@style/TvMenuButton"
+            android:layout_width="0dp"
+            android:layout_height="120dp"
+            android:layout_marginEnd="16dp"
+            android:layout_weight="1"
+            android:text="🎬 Películas"
+            android:focusable="true" />
+
+        <Button
+            android:id="@+id/tv_menu_series"
+            style="@style/TvMenuButton"
+            android:layout_width="0dp"
+            android:layout_height="120dp"
+            android:layout_weight="1"
+            android:text="📺 Series"
+            android:focusable="true" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/tv_menu_settings"
+            style="@style/TvMenuButton"
+            android:layout_width="0dp"
+            android:layout_height="72dp"
+            android:layout_marginEnd="16dp"
+            android:layout_weight="1"
+            android:text="⚙ Ajustes"
+            android:focusable="true" />
+
+        <Button
+            android:id="@+id/tv_menu_logout"
+            style="@style/TvMenuButton"
+            android:layout_width="0dp"
+            android:layout_height="72dp"
+            android:layout_weight="1"
+            android:text="Salir"
+            android:focusable="true" />
+    </LinearLayout>
+</LinearLayout>

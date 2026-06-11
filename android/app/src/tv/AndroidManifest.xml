@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Magis TV: leanback opcional para que el APK aparezca en más dispositivos (TV box, Fire, etc.) -->
+    <uses-feature
+        android:name="android.software.leanback"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="false" />
+
+    <supports-screens
+        android:anyDensity="true"
+        android:largeScreens="true"
+        android:normalScreens="true"
+        android:resizeable="true"
+        android:smallScreens="true"
+        android:xlargeScreens="true" />
+
+    <application
+        android:banner="@drawable/ic_tv_banner"
+        android:largeHeap="true">
+        <meta-data
+            android:name="design_width"
+            android:value="1920" />
+        <meta-data
+            android:name="design_height"
+            android:value="1080" />
+
+        <activity
+            android:name=".TvLauncherActivity"
+            android:exported="true"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.VixTV.Fullscreen">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="tv.vix.app.ACTION_UPDATE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".TvLoginActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.VixTV.Fullscreen" />
+
+        <activity
+            android:name=".TvShellActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.VixTV.Fullscreen" />
+
+        <activity
+            android:name=".TvHomeActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.VixTV.Fullscreen" />
+
+        <activity
+            android:name=".TvSeriesDetailActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.VixTV.Fullscreen" />
+
+        <activity
+            android:name=".TvMovieDetailActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.VixTV.Fullscreen" />
+
+        <activity
+            android:name=".TvBrowseActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.VixTV.Fullscreen" />
+
+        <activity
+            android:name=".TvAccountActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.VixTV.Fullscreen" />
+
+        <activity
+            android:name=".TvHistoryActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.VixTV.Fullscreen" />
+
+        <activity
+            android:name=".TvFunctionsActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.VixTV.Fullscreen" />
+
+        <activity
+            android:name=".TvSearchActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.VixTV.Fullscreen" />
+
+        <activity
+            android:name=".TvCategoryBrowseActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.VixTV.Fullscreen" />
+
+        <activity
+            android:name=".TvPlayerActivity"
+            android:exported="false"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.VixTV.Fullscreen" />
+    </application>
+</manifest>

@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/native_login_panel"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#07070d"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="40dp"
+    android:visibility="gone">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Vix TV"
+        android:textColor="#f5c518"
+        android:textSize="32sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center"
+        android:text="@string/native_login_sub"
+        android:textColor="#aaaaaa"
+        android:textSize="15sp" />
+
+    <EditText
+        android:id="@+id/native_login_user"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="28dp"
+        android:background="#1a1a28"
+        android:hint="@string/native_login_user_hint"
+        android:inputType="text"
+        android:padding="14dp"
+        android:textColor="#ffffff"
+        android:textColorHint="#666666" />
+
+    <EditText
+        android:id="@+id/native_login_pass"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:background="#1a1a28"
+        android:hint="@string/native_login_pass_hint"
+        android:inputType="textPassword"
+        android:padding="14dp"
+        android:textColor="#ffffff"
+        android:textColorHint="#666666" />
+
+    <Button
+        android:id="@+id/native_login_btn"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:backgroundTint="#f5c518"
+        android:text="@string/native_login_btn"
+        android:textColor="#111111"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/native_login_error"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:gravity="center"
+        android:textColor="#ff4757"
+        android:textSize="14sp" />
+
+    <TextView
+        android:id="@+id/native_login_server"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:gravity="center"
+        android:textColor="#777777"
+        android:textSize="12sp" />
+
+    <Button
+        android:id="@+id/native_login_settings"
+        style="?android:attr/borderlessButtonStyle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/open_settings"
+        android:textColor="#f5c518" />
+</LinearLayout>

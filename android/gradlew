@@ -1,0 +1,10 @@
+#!/bin/sh
+# Gradle wrapper bootstrap — ejecuta build-apks.sh (Docker) o usa Android Studio.
+set -e
+APP_HOME=$( cd "${0%/*}" && pwd -P )
+CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
+if [ ! -f "$CLASSPATH" ]; then
+  echo "Falta gradle-wrapper.jar. Ejecuta: ./build-apks.sh"
+  exit 1
+fi
+exec java -classpath "$CLASSPATH" org.gradle.wrapper.GradleWrapperMain "$@"

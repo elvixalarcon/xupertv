@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-label="Vix TV">
+  <defs>
+    <linearGradient id="vix-gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f5c518"/>
+      <stop offset="100%" stop-color="#e8a317"/>
+    </linearGradient>
+    <radialGradient id="vix-glow" cx="30%" cy="20%" r="70%">
+      <stop offset="0%" stop-color="#7c3aed" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#07070d" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="192" height="192" rx="40" fill="#07070d"/>
+  <rect width="192" height="192" rx="40" fill="url(#vix-glow)"/>
+  <text x="96" y="128" font-family="Inter,Arial,sans-serif" font-size="96" font-weight="800" text-anchor="middle" fill="url(#vix-gold)">V</text>
+</svg>
