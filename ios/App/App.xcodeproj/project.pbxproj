@@ -13,6 +13,7 @@
 		VIXNAT003A1B2C3D4E5F6789 /* VixNativeCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = VIXNAT001A1B2C3D4E5F6789 /* VixNativeCore.swift */; };
 		VIXNAT004A1B2C3D4E5F6789 /* VixNativeViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = VIXNAT002A1B2C3D4E5F6789 /* VixNativeViews.swift */; };
 		VIXNAT006A1B2C3D4E5F6789 /* VixNativeExtras.swift in Sources */ = {isa = PBXBuildFile; fileRef = VIXNAT005A1B2C3D4E5F6789 /* VixNativeExtras.swift */; };
+		UIKITSHELL02A1B2C3D4E5F678 /* VixUIKitShell.swift in Sources */ = {isa = PBXBuildFile; fileRef = UIKITSHELL01A1B2C3D4E5F678 /* VixUIKitShell.swift */; };
 		504EC30F1FED79650016851F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30E1FED79650016851F /* Assets.xcassets */; };
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 /* End PBXBuildFile section */
@@ -25,6 +26,7 @@
 		VIXNAT001A1B2C3D4E5F6789 /* VixNativeCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VixNativeCore.swift; sourceTree = "<group>"; };
 		VIXNAT002A1B2C3D4E5F6789 /* VixNativeViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VixNativeViews.swift; sourceTree = "<group>"; };
 		VIXNAT005A1B2C3D4E5F6789 /* VixNativeExtras.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VixNativeExtras.swift; sourceTree = "<group>"; };
+		UIKITSHELL01A1B2C3D4E5F678 /* VixUIKitShell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VixUIKitShell.swift; sourceTree = "<group>"; };
 		504EC30E1FED79650016851F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		504EC3111FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		504EC3131FED79650016851F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -66,6 +68,7 @@
 				VIXNAT001A1B2C3D4E5F6789 /* VixNativeCore.swift */,
 				VIXNAT002A1B2C3D4E5F6789 /* VixNativeViews.swift */,
 				VIXNAT005A1B2C3D4E5F6789 /* VixNativeExtras.swift */,
+				UIKITSHELL01A1B2C3D4E5F678 /* VixUIKitShell.swift */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
 				504EC3131FED79650016851F /* Info.plist */,
@@ -152,6 +155,7 @@
 				VIXNAT003A1B2C3D4E5F6789 /* VixNativeCore.swift in Sources */,
 				VIXNAT004A1B2C3D4E5F6789 /* VixNativeViews.swift in Sources */,
 				VIXNAT006A1B2C3D4E5F6789 /* VixNativeExtras.swift in Sources */,
+				UIKITSHELL02A1B2C3D4E5F678 /* VixUIKitShell.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -289,11 +293,11 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 1.0.56;
+				MARKETING_VERSION = 1.0.57;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-weak_framework",
@@ -312,11 +316,11 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 1.0.56;
+				MARKETING_VERSION = 1.0.57;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-weak_framework",
