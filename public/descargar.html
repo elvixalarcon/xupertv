@@ -196,25 +196,34 @@
         </ol>
       </div>
 
+      <div class="card" id="card-ipa-native">
+        <div class="label">App nativa (IPA)</div>
+        <span class="badge badge-ios">Instalar en iPhone</span>
+        <p style="margin:12px 0 8px;color:#ccc;line-height:1.55">
+          En <strong>Safari</strong>, toca <strong>Instalar</strong> y iOS mostrará el diálogo
+          <em>«¿Deseas instalar "Vix TV"?»</em> con el botón <strong>Instalar</strong>.
+        </p>
+        <div class="actions">
+          <a class="btn" id="btn-install-ipa" href="/ipa/install" style="background:#007aff">Instalar Vix TV</a>
+          <a class="btn btn-secondary" id="btn-download-ipa" href="/ipa/ios">Solo descargar IPA</a>
+        </div>
+        <p id="meta-ipa" style="color:#888;font-size:13px;margin:12px 0 0"></p>
+        <a class="url" id="url-ipa-install" href="/d/ipa" style="margin-top:10px;font-size:.95rem">/d/ipa</a>
+      </div>
+
       <div class="card">
-        <div class="label">App nativa con eSign (avanzado)</div>
+        <div class="label">Con eSign (si falla la instalación directa)</div>
         <span class="badge badge-ios">IPA + eSign</span>
         <p style="margin:12px 0 8px;color:#ccc;line-height:1.55">
-          Si tienes <strong>eSign</strong> en el iPhone, puedes instalar un IPA nativo (como el APK en Android).
-          <strong>eSign firma el archivo en el teléfono</strong> — no hace falta Mac para instalar, pero el IPA
-          debe compilarse una vez en macOS o con GitHub Actions.
+          Si el IPA aún no está firmado, iOS puede rechazar la instalación OTA. En ese caso:
+          descarga el archivo, ábrelo con <strong>eSign</strong>, fírmalo e instálalo desde ahí.
         </p>
-        <p style="margin:8px 0 6px">Descarga del IPA (sin firmar, para eSign):</p>
         <a class="url" id="url-ipa" href="/ipa/ios">/ipa/ios</a>
         <ol style="margin-top:14px">
-          <li>Descarga el IPA en Safari y guárdalo en <strong>Archivos</strong>.</li>
-          <li>Abre <strong>eSign</strong> → importa el IPA → elige tu certificado → <strong>Firmar</strong> → <strong>Instalar</strong>.</li>
+          <li>Descarga el IPA → <strong>Compartir → Abrir en eSign</strong>.</li>
+          <li>Elige tu certificado → <strong>Firmar</strong> → <strong>Instalar</strong>.</li>
           <li>Confía en el desarrollador en Ajustes si iOS lo pide.</li>
         </ol>
-        <p style="color:#888;font-size:13px;margin:12px 0 0">
-          Si el enlace dice «no disponible», el administrador aún no ha subido el IPA.
-          Mientras tanto usa la PWA de arriba.
-        </p>
       </div>
     </section>
 
@@ -287,11 +296,35 @@
       document.getElementById('url-ios').textContent = links.ios_short || base + '/d/ios';
       document.getElementById('url-ios').href = links.ios_install || base + '/descargar#iphone';
       document.getElementById('open-app-ios').href = base + '/';
+      const ipaInstall = links.ipa_install || base + '/ipa/install';
+      const ipaShort = links.ipa_install_short || base + '/d/ipa';
+      const ipaDirect = links.ipa_direct || base + '/ipa/ios';
+      const btnInstallIpa = document.getElementById('btn-install-ipa');
+      const btnDownloadIpa = document.getElementById('btn-download-ipa');
+      const urlIpaInstall = document.getElementById('url-ipa-install');
       const urlIpa = document.getElementById('url-ipa');
+      const cardIpa = document.getElementById('card-ipa-native');
+      const metaIpa = document.getElementById('meta-ipa');
+
+      if (btnInstallIpa) btnInstallIpa.href = ipaInstall;
+      if (btnDownloadIpa) btnDownloadIpa.href = ipaDirect;
+      if (urlIpaInstall) {
+        urlIpaInstall.textContent = ipaShort.replace(base, '') || '/d/ipa';
+        urlIpaInstall.href = ipaInstall;
+      }
       if (urlIpa) {
-        const ipaHref = links.ipa_direct || base + '/ipa/ios';
-        urlIpa.textContent = ipaHref.replace(base, '') || '/ipa/ios';
-        urlIpa.href = ipaHref;
+        urlIpa.textContent = ipaDirect.replace(base, '') || '/ipa/ios';
+        urlIpa.href = ipaDirect;
+      }
+      if (cardIpa && links.ipa_available === false) {
+        cardIpa.classList.add('hidden');
+      }
+      if (metaIpa) {
+        const parts = [
+          links.ipa_version ? `v${links.ipa_version}` : '',
+          formatBytes(links.ipa_size)
+        ].filter(Boolean);
+        metaIpa.textContent = parts.length ? `IPA publicado: ${parts.join(' · ')}` : '';
       }
 
       const tvVer = links.tv_version_name ? `v${links.tv_version_name}` : '';

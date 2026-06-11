@@ -9,16 +9,17 @@
 
 **eSign no compila la app** — solo firma un `.ipa` que ya existe.
 
-## Opción A — GitHub Actions (sin Mac)
+## Opción A — GitHub Actions + firma automática en el servidor
 
 1. Sube el repo a GitHub.
 2. Ve a **Actions → iOS IPA (unsigned) → Run workflow**.
 3. Al terminar, descarga el artefacto **VixTV-unsigned-ipa**.
-4. Copia `VixTV.ipa` al servidor:
+4. En el servidor:
    ```bash
-   cp VixTV.ipa /ruta/xupertv/data/ipa/VixTV.ipa
+   cp VixTV.ipa /root/xupertv/data/ipa/VixTV-unsigned.ipa
+   ./scripts/sign-ipa.sh
    ```
-5. Los usuarios descargan: `https://tv.vixred.com/ipa/ios`
+5. Instalación directa: `https://tv.vixred.com/d/ipa`
 
 ## Opción B — Mac (una vez)
 

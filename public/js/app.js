@@ -52,19 +52,29 @@ let hlsInstance = null;
 let allChannels = [];
 let currentGroup = 'all';
 
+function isCapacitorIos() {
+  try {
+    if (window.Capacitor?.getPlatform?.() === 'ios') return true;
+    if (window.Capacitor?.isNativePlatform?.() && /iPhone|iPad|iPod/i.test(navigator.userAgent || '')) return true;
+  } catch { /* ignore */ }
+  return false;
+}
+
 function getVixPlatform() {
   if (window.VIXTV_NATIVE?.platform) return window.VIXTV_NATIVE.platform;
+  if (isCapacitorIos()) return 'ios';
   const q = new URLSearchParams(location.search).get('vix_platform');
-  if (q === 'tv' || q === 'mobile') return q;
+  if (q === 'tv' || q === 'mobile' || q === 'ios') return q;
   const ua = navigator.userAgent || '';
   if (/VixTV\/[^\s]+\s+tv\b/i.test(ua)) return 'tv';
   if (/VixTV\/[^\s]+\s+mobile\b/i.test(ua)) return 'mobile';
+  if (/VixTV\/[^\s]+\s+ios\b/i.test(ua)) return 'ios';
   if (/Android TV|Google TV|AFT[A-Z0-9]|Bravia|SmartTV|Tizen.*TV|Web0S/i.test(ua)) return 'tv';
   return 'mobile';
 }
 
 function isVixNativeApp() {
-  return !!(window.VIXTV_NATIVE || /VixTV\//i.test(navigator.userAgent));
+  return !!(window.VIXTV_NATIVE || /VixTV\//i.test(navigator.userAgent) || isCapacitorIos());
 }
 
 function isTvMode() {
@@ -77,9 +87,13 @@ let vixTvFocusedEl = null;
 
 function applyVixPlatformUi() {
   const platform = getVixPlatform();
-  document.documentElement.classList.remove('vix-tv', 'vix-mobile');
+  document.documentElement.classList.remove('vix-tv', 'vix-mobile', 'vix-ios');
   document.documentElement.classList.add(`vix-${platform}`);
   if (isVixNativeApp()) document.documentElement.classList.add('vix-native');
+  if (isCapacitorIos()) {
+    document.documentElement.classList.add('vix-capacitor');
+    try { document.body.style.webkitOverflowScrolling = 'touch'; } catch { /* ignore */ }
+  }
   if (platform === 'tv') {
     applyTvNavFocusables();
     trackTvFocus();
@@ -727,12 +741,14 @@ function showPage(name) {
   $$('.page').forEach(p => p.classList.remove('active', 'page-enter'));
   $$('.nav-btn').forEach(b => b.classList.remove('active'));
   $$('.mob-nav-btn').forEach(b => b.classList.remove('active'));
+  $$('.ios-nav-btn').forEach(b => b.classList.remove('active'));
   const pageEl = $(`#page-${name}`);
   pageEl?.classList.add('active', 'page-enter');
   pageEl?.addEventListener('animationend', () => pageEl.classList.remove('page-enter'), { once: true });
   if (!['movie-detail', 'series-detail'].includes(name)) {
     $(`.nav-btn[data-page="${name}"]`)?.classList.add('active');
     $(`.mob-nav-btn[data-page="${name}"]`)?.classList.add('active');
+    $(`.ios-nav-btn[data-page="${name}"]`)?.classList.add('active');
   }
   const bottomNav = $('#mobile-bottom-nav');
   if (bottomNav) bottomNav.classList.toggle('hidden', name === 'admin');
@@ -951,7 +967,7 @@ function defaultPageForUser() {
 function applyNavPermissions() {
   const map = { movies: 'movies', series: 'series', live: 'live' };
   const mixedPages = new Set(['destacados', 'kids', 'anime', 'explorar', 'home']);
-  $$('.nav-btn, .mob-nav-btn').forEach((btn) => {
+  $$('.nav-btn, .mob-nav-btn, .ios-nav-btn').forEach((btn) => {
     const page = btn.dataset.page;
     if (mixedPages.has(page)) {
       const show = canAccess('movies') || canAccess('series');
@@ -970,6 +986,7 @@ function applyNavPermissions() {
   const showCategories = canAccess('movies') || canAccess('series');
   $('#nav-categories')?.classList.toggle('hidden', !showCategories);
   $('#mob-nav-categories')?.classList.toggle('hidden', !showCategories);
+  $('#ios-nav-categories')?.classList.toggle('hidden', !showCategories);
   if (VIX_PLATFORM === 'tv') applyTvNavFocusables();
 }
 
@@ -3623,7 +3640,7 @@ function bindPasswordModal() {
 
 /* NAV */
 function bindNav() {
-  $$('.nav-btn, .mob-nav-btn').forEach(btn => {
+  $$('.nav-btn, .mob-nav-btn, .ios-nav-btn').forEach(btn => {
     btn.addEventListener('click', () => navigateToPage(btn.dataset.page));
   });
 }
@@ -4433,12 +4450,13 @@ function initCarouselDragScroll() {
 
   document.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
-    const track = e.target.closest('.carousel');
+    const track = e.target.closest('.carousel, .catalog-row__track');
     if (!track) return;
     if (e.target.closest('button, a, input, .library-action-btn, .card-action-btn')) return;
     carouselDrag = {
       el: track,
       startX: e.clientX,
+      startY: e.clientY,
       startScroll: track.scrollLeft,
       pointerId: e.pointerId,
       active: false
@@ -4448,8 +4466,13 @@ function initCarouselDragScroll() {
   document.addEventListener('pointermove', (e) => {
     if (!carouselDrag || e.pointerId !== carouselDrag.pointerId) return;
     const dx = e.clientX - carouselDrag.startX;
+    const dy = e.clientY - carouselDrag.startY;
     if (!carouselDrag.active) {
-      if (Math.abs(dx) < dragThreshold) return;
+      if (Math.abs(dx) < dragThreshold && Math.abs(dy) < dragThreshold) return;
+      if (Math.abs(dy) > Math.abs(dx)) {
+        carouselDrag = null;
+        return;
+      }
       carouselDrag.active = true;
       carouselDrag.el.classList.add('is-dragging');
       try { carouselDrag.el.setPointerCapture(e.pointerId); } catch { /* ignore */ }

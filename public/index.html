@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="/icons/icon-192.svg">
   <link rel="manifest" href="/manifest.json">
   <title>Vix TV</title>
-  <link rel="stylesheet" href="/css/style.css?v=145">
+  <link rel="stylesheet" href="/css/style.css?v=158">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
@@ -88,6 +88,18 @@
         <button data-page="categories" class="nav-btn tv-focusable hidden" id="nav-categories" tabindex="0">Categorías</button>
         <button data-page="mylist" class="nav-btn tv-focusable" tabindex="0">Mi lista</button>
         <button data-page="live" class="nav-btn tv-focusable live-btn" tabindex="0"><span class="live-dot" aria-hidden="true"></span> En Vivo</button>
+      </nav>
+      <nav class="ios-menu-bar" id="ios-menu-bar" aria-label="Menú principal">
+        <button data-page="home" class="ios-nav-btn active" type="button">Inicio</button>
+        <button data-page="destacados" class="ios-nav-btn" type="button">Destacados</button>
+        <button data-page="movies" class="ios-nav-btn" type="button">Películas</button>
+        <button data-page="series" class="ios-nav-btn" type="button">Series</button>
+        <button data-page="kids" class="ios-nav-btn" type="button">Kids</button>
+        <button data-page="anime" class="ios-nav-btn" type="button">Anime</button>
+        <button data-page="explorar" class="ios-nav-btn" type="button">Explorar</button>
+        <button data-page="categories" class="ios-nav-btn hidden" id="ios-nav-categories" type="button">Categorías</button>
+        <button data-page="mylist" class="ios-nav-btn" type="button">Mi lista</button>
+        <button data-page="live" class="ios-nav-btn ios-nav-live" type="button"><span class="live-dot" aria-hidden="true"></span> En Vivo</button>
       </nav>
       <div class="topbar-right">
         <button type="button" id="switch-profile-btn" class="btn-ghost profile-switch-btn tv-focusable hidden" title="Cambiar perfil" tabindex="0">Perfiles</button>
@@ -390,6 +402,6 @@
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
   <script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1" async></script>
   <script src="/js/cast.js?v=1"></script>
-  <script src="/js/app.js?v=157"></script>
+  <script src="/js/app.js?v=158"></script>
 </body>
 </html>

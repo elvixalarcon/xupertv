@@ -144,6 +144,14 @@ function sendPublicApk(res, filename) {
   res.sendFile(full);
 }
 
+const ipaInstall = require('./services/ipaInstall');
+
+function requestBaseUrl(req) {
+  const proto = req.get('x-forwarded-proto') || req.protocol || 'http';
+  const host = req.get('x-forwarded-host') || req.get('host') || 'localhost';
+  return `${proto}://${host}`;
+}
+
 function sendPublicIpa(res, filename) {
   const full = path.join(DATA, 'ipa', filename);
   if (!fs.existsSync(full)) {
@@ -157,10 +165,27 @@ function sendPublicIpa(res, filename) {
 
 app.get('/apk/tv', (req, res) => sendPublicApk(res, 'VixTV-tv.apk'));
 app.get('/apk/mobile', (req, res) => sendPublicApk(res, 'VixTV-mobile.apk'));
-app.get('/ipa/ios', (req, res) => sendPublicIpa(res, 'VixTV.ipa'));
+app.get('/ipa/ios', (req, res) => sendPublicIpa(res, ipaInstall.IPA_FILE));
+app.get('/ipa/manifest.plist', (req, res) => {
+  const info = ipaInstall.getIpaInfo();
+  if (!info.available) {
+    return res.status(404).send('IPA no disponible');
+  }
+  const base = requestBaseUrl(req).replace(/\/$/, '');
+  res.setHeader('Content-Type', 'text/xml; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=120');
+  res.send(ipaInstall.buildManifestPlist(base));
+});
+app.get('/ipa/install', (req, res) => {
+  const info = ipaInstall.getIpaInfo();
+  if (!info.available) {
+    return res.redirect(302, '/descargar#iphone');
+  }
+  res.sendFile(path.join(__dirname, '..', 'public', 'ipa-install.html'));
+});
 app.get('/d/tv', (req, res) => res.redirect(302, '/apk/tv'));
 app.get('/d/m', (req, res) => res.redirect(302, '/apk/mobile'));
-app.get('/d/ipa', (req, res) => res.redirect(302, '/ipa/ios'));
+app.get('/d/ipa', (req, res) => res.redirect(302, '/ipa/install'));
 app.get('/d/ios', (req, res) => res.redirect(302, '/descargar#iphone'));
 app.get('/iphone', (req, res) => res.redirect(302, '/descargar#iphone'));
 app.get('/ios', (req, res) => res.redirect(302, '/descargar#iphone'));

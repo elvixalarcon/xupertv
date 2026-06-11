@@ -1,6 +1,6 @@
 {
   "name": "xupertv",
-  "version": "1.0.47",
+  "version": "1.0.48",
   "description": "Plataforma de streaming tipo MagisTV",
   "main": "server/index.js",
   "scripts": {

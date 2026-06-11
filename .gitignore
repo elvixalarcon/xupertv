@@ -25,6 +25,8 @@ ios/App/output/
 # Server runtime data (no subir al repo)
 data/
 !data/ipa/.gitkeep
+certificado.zip
+certificado/
 
 # IDE
 .idea/

@@ -1,5 +1,6 @@
 const express = require('express');
 const appUpdate = require('../services/appUpdate');
+const ipaInstall = require('../services/ipaInstall');
 
 const router = express.Router();
 
@@ -23,6 +24,7 @@ router.get('/download-links', (req, res) => {
   const mobileCode = settings.app_mobile_version_code || 1;
   const tvApk = appUpdate.getApkInfo('tv');
   const mobileApk = appUpdate.getApkInfo('mobile');
+  const ipa = ipaInstall.getIpaInfo();
   res.json({
     tv_apk: `${base}/apk/tv`,
     mobile_apk: `${base}/apk/mobile`,
@@ -32,6 +34,14 @@ router.get('/download-links', (req, res) => {
     mobile_short: `${base}/d/m`,
     ios_short: `${base}/d/ios`,
     ios_install: `${base}/descargar#iphone`,
+    ipa_install: `${base}/ipa/install`,
+    ipa_install_short: `${base}/d/ipa`,
+    ipa_direct: `${base}/ipa/ios`,
+    ipa_manifest: `${base}/ipa/manifest.plist`,
+    ipa_itms: ipa.available ? ipaInstall.buildItmsInstallUrl(base) : null,
+    ipa_available: ipa.available,
+    ipa_size: ipa.size || 0,
+    ipa_version: ipaInstall.getAppVersion(),
     tv_code: `${base}/tv`,
     download_page: `${base}/descargar`,
     tv_version_name: settings.app_tv_version_name,

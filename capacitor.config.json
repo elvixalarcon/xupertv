@@ -10,7 +10,9 @@
   "ios": {
     "contentInset": "automatic",
     "allowsLinkPreview": false,
-    "scrollEnabled": false
+    "scrollEnabled": true,
+    "backgroundColor": "#07070d",
+    "limitsNavigationsToAppBoundDomains": false
   },
   "android": {
     "allowMixedContent": true
