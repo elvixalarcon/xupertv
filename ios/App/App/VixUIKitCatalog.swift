@@ -32,16 +32,44 @@ enum VixImageLoader {
 }
 
 enum VixUIKitPlayer {
+    private static var progressObserver: Any?
+    private static var progressHandler: ((Double, Double) -> Void)?
+
     static func activateAudioSession() {
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
         try? AVAudioSession.sharedInstance().setActive(true)
     }
 
-    static func playFullscreen(from vc: UIViewController, url: URL, startAt: Double = 0) {
+    static func playerItem(for url: URL, token: String) -> AVPlayerItem {
+        guard !token.isEmpty else { return AVPlayerItem(url: url) }
+        let asset = AVURLAsset(url: url, options: [
+            "AVURLAssetHTTPHeaderFieldsKey": ["Authorization": "Bearer \(token)"]
+        ])
+        return AVPlayerItem(asset: asset)
+    }
+
+    static func playFullscreen(
+        from vc: UIViewController,
+        url: URL,
+        startAt: Double = 0,
+        onProgress: ((Double, Double) -> Void)? = nil
+    ) {
         activateAudioSession()
-        let item = AVPlayerItem(url: url)
+        clearProgressObserver()
+        progressHandler = onProgress
+        let token = AuthSession.shared.api.token
+        let item = playerItem(for: url, token: token)
         let player = AVPlayer(playerItem: item)
         player.automaticallyWaitsToMinimizeStalling = true
+        if let onProgress {
+            progressObserver = player.addPeriodicTimeObserver(
+                forInterval: CMTime(seconds: 15, preferredTimescale: 1),
+                queue: .main
+            ) { t in
+                let dur = player.currentItem?.duration.seconds ?? 0
+                if dur.isFinite && dur > 0 { onProgress(t.seconds, dur) }
+            }
+        }
         let pvc = AVPlayerViewController()
         pvc.player = player
         pvc.modalPresentationStyle = .fullScreen
@@ -52,6 +80,11 @@ enum VixUIKitPlayer {
                 player.play()
             }
         }
+    }
+
+    private static func clearProgressObserver() {
+        progressHandler = nil
+        progressObserver = nil
     }
 
     static func attachLive(player: inout AVPlayer?, playerVC: AVPlayerViewController, url: URL) {
@@ -80,6 +113,31 @@ enum VixUIKitPlayer {
     }
 }
 
+final class VixBrandLogoView: UIView {
+    private let letter = UILabel()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = UIColor(red: 0.03, green: 0.03, blue: 0.05, alpha: 1)
+        layer.cornerRadius = 8
+        layer.borderWidth = 0.5
+        layer.borderColor = UIColor(white: 1, alpha: 0.12).cgColor
+        clipsToBounds = true
+        letter.text = "V"
+        letter.font = .systemFont(ofSize: 20, weight: .heavy)
+        letter.textColor = UIColor(red: 0.96, green: 0.77, blue: 0.09, alpha: 1)
+        letter.textAlignment = .center
+        letter.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(letter)
+        NSLayoutConstraint.activate([
+            letter.centerXAnchor.constraint(equalTo: centerXAnchor),
+            letter.centerYAnchor.constraint(equalTo: centerYAnchor)
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+}
+
 enum VixMetaChip {
     static func make(_ text: String) -> UILabel {
         let l = UILabel()
@@ -99,7 +157,7 @@ final class UIKitHomeViewController: UIViewController {
     private enum Section: Hashable {
         case hero
         case tabs
-        case row(String)
+        case row(id: String, title: String, subtitle: String?)
     }
 
     private let tabs: [HomeTab] = [
@@ -117,6 +175,7 @@ final class UIKitHomeViewController: UIViewController {
     private var dataSource: UICollectionViewDiffableDataSource<Section, CatalogPoster>!
     private var heroSlides: [HeroSlide] = []
     private var sections: [CatalogSection] = []
+    private var continueItems: [WatchItem] = []
     private var selectedTab = "inicio"
     private let heroView = VixHeroCarouselView()
     private let searchField = UITextField()
@@ -146,10 +205,20 @@ final class UIKitHomeViewController: UIViewController {
     }
 
     private func setupHeader() {
+        let logoMark = VixBrandLogoView()
+        logoMark.translatesAutoresizingMaskIntoConstraints = false
         let logo = UILabel()
-        logo.text = "Vix TV"
+        logo.text = "ix TV"
         logo.font = .boldSystemFont(ofSize: 22)
-        logo.textColor = VixUITheme.accent
+        logo.textColor = .white
+        let logoRow = UIStackView(arrangedSubviews: [logoMark, logo])
+        logoRow.axis = .horizontal
+        logoRow.spacing = 8
+        logoRow.alignment = .center
+        NSLayoutConstraint.activate([
+            logoMark.widthAnchor.constraint(equalToConstant: 34),
+            logoMark.heightAnchor.constraint(equalToConstant: 34)
+        ])
 
         searchField.placeholder = "Buscar por título…"
         searchField.textColor = .white
@@ -167,7 +236,7 @@ final class UIKitHomeViewController: UIViewController {
         profile.tintColor = VixUITheme.muted
         profile.addTarget(self, action: #selector(openAccount), for: .touchUpInside)
 
-        let top = UIStackView(arrangedSubviews: [logo, searchField, profile])
+        let top = UIStackView(arrangedSubviews: [logoRow, searchField, profile])
         top.axis = .horizontal
         top.spacing = 10
         top.alignment = .center
@@ -190,7 +259,7 @@ final class UIKitHomeViewController: UIViewController {
         collectionView.delegate = self
         view.addSubview(collectionView)
 
-        let heroReg = UICollectionView.CellRegistration<UICollectionViewCell, CatalogPoster> { [weak self] cell, _, _ in
+        let heroReg = UICollectionView.CellRegistration<UICollectionViewCell, HomeCatalogItem> { [weak self] cell, _, _ in
             guard let self else { return }
             cell.contentView.subviews.forEach { $0.removeFromSuperview() }
             self.heroView.translatesAutoresizingMaskIntoConstraints = false
@@ -203,7 +272,7 @@ final class UIKitHomeViewController: UIViewController {
             ])
         }
 
-        let tabsReg = UICollectionView.CellRegistration<VixTabCell, CatalogPoster> { [weak self] cell, _, _ in
+        let tabsReg = UICollectionView.CellRegistration<VixTabCell, HomeCatalogItem> { [weak self] cell, _, _ in
             guard let self else { return }
             cell.configure(tabs: self.tabs, selected: self.selectedTab) { slug in
                 self.selectedTab = slug
@@ -211,16 +280,19 @@ final class UIKitHomeViewController: UIViewController {
             }
         }
 
-        let posterReg = UICollectionView.CellRegistration<VixPosterCell, CatalogPoster> { cell, _, item in
-            cell.configure(item: item)
+        let posterReg = UICollectionView.CellRegistration<VixPosterCell, HomeCatalogItem> { cell, _, item in
+            cell.configure(item: item.poster, progress: item.progress, duration: item.duration)
         }
 
-        dataSource = UICollectionViewDiffableDataSource(collectionView: collectionView) { cv, indexPath, item in
+        dataSource = UICollectionViewDiffableDataSource<Section, HomeCatalogItem>(collectionView: collectionView) { cv, indexPath, item in
             let section = self.dataSource.snapshot().sectionIdentifiers[indexPath.section]
             switch section {
-            case .hero: return cv.dequeueConfiguredReusableCell(using: heroReg, for: indexPath, item: item)
-            case .tabs: return cv.dequeueConfiguredReusableCell(using: tabsReg, for: indexPath, item: item)
-            case .row: return cv.dequeueConfiguredReusableCell(using: posterReg, for: indexPath, item: item)
+            case .hero:
+                return cv.dequeueConfiguredReusableCell(using: heroReg, for: indexPath, item: item)
+            case .tabs:
+                return cv.dequeueConfiguredReusableCell(using: tabsReg, for: indexPath, item: item)
+            case .row:
+                return cv.dequeueConfiguredReusableCell(using: posterReg, for: indexPath, item: item)
             }
         }
 
@@ -231,13 +303,13 @@ final class UIKitHomeViewController: UIViewController {
         dataSource.supplementaryViewProvider = { [weak self] cv, kind, indexPath in
             guard kind == UICollectionView.elementKindSectionHeader,
                   let self,
-                  case .row(let title) = self.dataSource.snapshot().sectionIdentifiers[indexPath.section] else { return nil }
+                  case .row(_, let title, let subtitle) = self.dataSource.snapshot().sectionIdentifiers[indexPath.section] else { return nil }
             let header = cv.dequeueReusableSupplementaryView(
                 ofKind: kind,
                 withReuseIdentifier: VixSectionHeader.reuseId,
                 for: indexPath
             ) as! VixSectionHeader
-            header.setTitle(title)
+            header.setTitle(title, subtitle: subtitle)
             return header
         }
 
@@ -278,7 +350,7 @@ final class UIKitHomeViewController: UIViewController {
                 let sec = NSCollectionLayoutSection(group: group)
                 sec.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 0, bottom: 8, trailing: 0)
                 return sec
-            case .row:
+            case .row(id: _, title: _, subtitle: _):
                 let item = NSCollectionLayoutItem(layoutSize: NSCollectionLayoutSize(
                     widthDimension: .absolute(118), heightDimension: .absolute(178)))
                 let group = NSCollectionLayoutGroup.horizontal(layoutSize: NSCollectionLayoutSize(
@@ -289,7 +361,7 @@ final class UIKitHomeViewController: UIViewController {
                 row.interGroupSpacing = 10
                 row.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 16, bottom: 20, trailing: 16)
                 let header = NSCollectionLayoutBoundarySupplementaryItem(
-                    layoutSize: NSCollectionLayoutSize(widthDimension: .fractionalWidth(1), heightDimension: .absolute(36)),
+                    layoutSize: NSCollectionLayoutSize(widthDimension: .fractionalWidth(1), heightDimension: .absolute(48)),
                     elementKind: UICollectionView.elementKindSectionHeader,
                     alignment: .top)
                 row.boundarySupplementaryItems = [header]
@@ -307,11 +379,14 @@ final class UIKitHomeViewController: UIViewController {
                 let api = AuthSession.shared.api
                 let tab = self.selectedTab
                 async let heroTask: [HeroSlide] = self.loadHero(for: tab, api: api)
+                async let continueTask: [WatchItem] = tab == "inicio" ? (try? await api.watchContinue()) ?? [] : []
                 let catalogSections: [CatalogSection] = try await self.loadSections(for: tab, api: api)
                 let hero = await heroTask
+                let cont = await continueTask
                 await MainActor.run {
                     self.heroSlides = hero
                     self.sections = catalogSections
+                    self.continueItems = cont
                     self.heroView.setSlides(hero, api: api)
                     self.applySnapshot()
                     self.spinner.stopAnimating()
@@ -358,15 +433,41 @@ final class UIKitHomeViewController: UIViewController {
     }
 
     private func applySnapshot() {
-        var snap = NSDiffableDataSourceSnapshot<Section, CatalogPoster>()
+        var snap = NSDiffableDataSourceSnapshot<Section, HomeCatalogItem>()
         snap.appendSections([.hero, .tabs])
-        snap.appendItems([CatalogPoster(id: -1, title: "", poster: nil, content_type: nil)], toSection: .hero)
-        snap.appendItems([CatalogPoster(id: -2, title: "", poster: nil, content_type: nil)], toSection: .tabs)
-        for sec in sections where !sec.items.isEmpty {
-            snap.appendSections([.row(sec.title)])
-            snap.appendItems(Array(sec.items.prefix(24)), toSection: .row(sec.title))
+        snap.appendItems([HomeCatalogItem(key: "hero", poster: CatalogPoster(id: -1, title: "", poster: nil, content_type: nil), progress: nil, duration: nil)], toSection: .hero)
+        snap.appendItems([HomeCatalogItem(key: "tabs", poster: CatalogPoster(id: -2, title: "", poster: nil, content_type: nil), progress: nil, duration: nil)], toSection: .tabs)
+
+        if selectedTab == "inicio" && !continueItems.isEmpty {
+            let sec = Section.row(id: "continue-watching", title: "Seguir viendo", subtitle: "Retoma donde lo dejaste")
+            snap.appendSections([sec])
+            let items = continueItems.prefix(16).map { w in
+                let poster = CatalogPoster(
+                    id: w.content_type == "episode" ? (w.series_id ?? w.content_id) : w.content_id,
+                    title: w.displayTitle,
+                    poster: w.poster,
+                    content_type: w.content_type == "episode" ? "series" : "movie"
+                )
+                return HomeCatalogItem(
+                    key: "cw-\(w.content_type)-\(w.content_id)",
+                    poster: poster,
+                    progress: w.progress,
+                    duration: w.duration,
+                    watch: w
+                )
+            }
+            snap.appendItems(items, toSection: sec)
         }
-        dataSource.apply(snap, animatingDifferences: true)
+
+        for sec in sections where !sec.items.isEmpty {
+            let section = Section.row(id: sec.id, title: sec.title, subtitle: sec.subtitle)
+            snap.appendSections([section])
+            let items = sec.items.prefix(24).map { p in
+                HomeCatalogItem(key: "\(sec.id)-\(p.mediaType)-\(p.id)", poster: p, progress: nil, duration: nil)
+            }
+            snap.appendItems(items, toSection: section)
+        }
+        dataSource.apply(snap, animatingDifferences: false)
     }
 
     private func startHeroTimer() {
@@ -398,9 +499,37 @@ final class UIKitHomeViewController: UIViewController {
 
 extension UIKitHomeViewController: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        guard let item = dataSource.itemIdentifier(for: indexPath), item.id > 0 else { return }
+        guard let item = dataSource.itemIdentifier(for: indexPath), item.poster.id > 0 else { return }
         let section = dataSource.snapshot().sectionIdentifiers[indexPath.section]
-        if case .row = section { openDetail(item) }
+        guard case .row = section else { return }
+        if let watch = item.watch {
+            openWatch(watch)
+            return
+        }
+        openDetail(item.poster)
+    }
+
+    private func openWatch(_ item: WatchItem) {
+        if item.content_type == "episode", let sid = item.series_id {
+            navigationController?.pushViewController(
+                UIKitSeriesDetailViewController(seriesId: sid, episodeId: item.content_id, startAt: item.progress ?? 0),
+                animated: true
+            )
+        } else if let path = item.video_path, !path.isEmpty,
+                  let url = PlayUrls.video(server: VixConfig.serverURL, token: AuthSession.shared.api.token, path: path, startAt: item.progress ?? 0) {
+            VixUIKitPlayer.playFullscreen(from: self, url: url, startAt: item.progress ?? 0) { prog, dur in
+                Task {
+                    try? await AuthSession.shared.api.saveWatchProgress(
+                        contentType: "movie", contentId: item.content_id, seriesId: nil, progress: prog, duration: dur
+                    )
+                }
+            }
+        } else {
+            navigationController?.pushViewController(
+                UIKitMovieDetailViewController(movieId: item.content_id, startAt: item.progress ?? 0),
+                animated: true
+            )
+        }
     }
 }
 
@@ -517,7 +646,11 @@ final class VixHeroCarouselView: UIView {
         index = i
         rebuildDots()
         let slide = slides[i]
-        titleLabel.text = slide.title.uppercased()
+        if let r = slide.rating, r > 0 {
+            titleLabel.text = "\(slide.title.uppercased())  ⭐ \(String(format: "%.1f", r))"
+        } else {
+            titleLabel.text = slide.title.uppercased()
+        }
         let imgURL = PlayUrls.poster(slide.backdrop ?? slide.poster)
         VixImageLoader.load(imgURL, into: imageView)
         stopPlayer()
@@ -616,6 +749,9 @@ final class VixPosterCell: UICollectionViewCell {
     static let reuseId = "poster"
     private let imageView = UIImageView()
     private let titleLabel = UILabel()
+    private let ratingLabel = UILabel()
+    private let progressBar = UIView()
+    private let progressFill = UIView()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -625,17 +761,43 @@ final class VixPosterCell: UICollectionViewCell {
         imageView.contentMode = .scaleAspectFill
         imageView.clipsToBounds = true
         imageView.translatesAutoresizingMaskIntoConstraints = false
+        ratingLabel.font = .systemFont(ofSize: 10, weight: .bold)
+        ratingLabel.textColor = .white
+        ratingLabel.backgroundColor = UIColor.black.withAlphaComponent(0.65)
+        ratingLabel.layer.cornerRadius = 6
+        ratingLabel.clipsToBounds = true
+        ratingLabel.textAlignment = .center
+        ratingLabel.translatesAutoresizingMaskIntoConstraints = false
+        progressBar.backgroundColor = UIColor.white.withAlphaComponent(0.2)
+        progressFill.backgroundColor = VixUITheme.accent
+        progressBar.translatesAutoresizingMaskIntoConstraints = false
+        progressFill.translatesAutoresizingMaskIntoConstraints = false
+        progressBar.isHidden = true
         titleLabel.font = .systemFont(ofSize: 11, weight: .medium)
         titleLabel.textColor = .white
         titleLabel.numberOfLines = 2
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(imageView)
+        contentView.addSubview(ratingLabel)
+        contentView.addSubview(progressBar)
+        progressBar.addSubview(progressFill)
         contentView.addSubview(titleLabel)
         NSLayoutConstraint.activate([
             imageView.topAnchor.constraint(equalTo: contentView.topAnchor),
             imageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             imageView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             imageView.heightAnchor.constraint(equalTo: contentView.widthAnchor, multiplier: 1.45),
+            ratingLabel.topAnchor.constraint(equalTo: imageView.topAnchor, constant: 6),
+            ratingLabel.trailingAnchor.constraint(equalTo: imageView.trailingAnchor, constant: -6),
+            ratingLabel.heightAnchor.constraint(equalToConstant: 20),
+            ratingLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 34),
+            progressBar.leadingAnchor.constraint(equalTo: imageView.leadingAnchor),
+            progressBar.trailingAnchor.constraint(equalTo: imageView.trailingAnchor),
+            progressBar.bottomAnchor.constraint(equalTo: imageView.bottomAnchor),
+            progressBar.heightAnchor.constraint(equalToConstant: 4),
+            progressFill.leadingAnchor.constraint(equalTo: progressBar.leadingAnchor),
+            progressFill.topAnchor.constraint(equalTo: progressBar.topAnchor),
+            progressFill.bottomAnchor.constraint(equalTo: progressBar.bottomAnchor),
             titleLabel.topAnchor.constraint(equalTo: imageView.bottomAnchor, constant: 4),
             titleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 4),
             titleLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -4),
@@ -645,31 +807,69 @@ final class VixPosterCell: UICollectionViewCell {
 
     required init?(coder: NSCoder) { fatalError() }
 
-    func configure(item: CatalogPoster) {
+    private var progressWidth: NSLayoutConstraint?
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        progressBar.isHidden = true
+        ratingLabel.isHidden = true
+        progressWidth?.isActive = false
+        progressWidth = nil
+    }
+
+    func configure(item: CatalogPoster, progress: Double? = nil, duration: Double? = nil) {
         titleLabel.text = item.title
         VixImageLoader.load(PlayUrls.poster(item.poster), into: imageView,
                             placeholder: UIImage(systemName: item.isSeries ? "tv" : "film"))
+        if let r = item.rating, r > 0 {
+            ratingLabel.isHidden = false
+            ratingLabel.text = " ⭐\(String(format: "%.1f", r)) "
+        } else {
+            ratingLabel.isHidden = true
+        }
+        if let prog = progress, let dur = duration, dur > 0, prog > 0 {
+            progressBar.isHidden = false
+            let pct = min(1, max(0, prog / dur))
+            progressWidth?.isActive = false
+            progressWidth = progressFill.widthAnchor.constraint(equalTo: progressBar.widthAnchor, multiplier: pct)
+            progressWidth?.isActive = true
+        } else {
+            progressBar.isHidden = true
+        }
     }
 }
 
 final class VixSectionHeader: UICollectionReusableView {
     static let reuseId = "hdr"
     private let label = UILabel()
+    private let subtitleLabel = UILabel()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         label.font = .boldSystemFont(ofSize: 18)
         label.textColor = .white
         label.translatesAutoresizingMaskIntoConstraints = false
+        subtitleLabel.font = .systemFont(ofSize: 12)
+        subtitleLabel.textColor = VixUITheme.muted
+        subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(label)
+        addSubview(subtitleLabel)
         NSLayoutConstraint.activate([
             label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
-            label.centerYAnchor.constraint(equalTo: centerYAnchor)
+            label.topAnchor.constraint(equalTo: topAnchor, constant: 4),
+            subtitleLabel.leadingAnchor.constraint(equalTo: label.leadingAnchor),
+            subtitleLabel.topAnchor.constraint(equalTo: label.bottomAnchor, constant: 2),
+            subtitleLabel.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -4)
         ])
     }
 
     required init?(coder: NSCoder) { fatalError() }
-    func setTitle(_ t: String) { label.text = t }
+
+    func setTitle(_ t: String, subtitle: String? = nil) {
+        label.text = t
+        subtitleLabel.text = subtitle
+        subtitleLabel.isHidden = (subtitle ?? "").isEmpty
+    }
 }
 
 // MARK: - Live TV (mejorado)
@@ -1025,7 +1225,7 @@ final class UIKitMovieDetailViewController: UIViewController {
         playButton.contentEdgeInsets = UIEdgeInsets(top: 16, left: 28, bottom: 16, right: 28)
         playButton.addTarget(self, action: #selector(play), for: .touchUpInside)
 
-        similarTitle.text = "Similares"
+        similarTitle.text = "Te recomendamos"
         similarTitle.font = .boldSystemFont(ofSize: 18)
         similarTitle.textColor = .white
         similarTitle.isHidden = true
@@ -1133,13 +1333,23 @@ final class UIKitMovieDetailViewController: UIViewController {
     }
 
     @objc private func play() {
-        guard let path = detail?.video_path, !path.isEmpty,
-              let url = PlayUrls.video(server: VixConfig.serverURL, token: AuthSession.shared.api.token, path: path, startAt: startAt) else {
+        guard let path = detail?.video_path, !path.isEmpty else {
             showAlert("Video no disponible")
             return
         }
-        let seek = path.lowercased().contains(".mkv") ? 0 : startAt
-        VixUIKitPlayer.playFullscreen(from: self, url: url, startAt: seek)
+        let normalized = PlayUrls.normalizeMediaPath(path)
+        guard let url = PlayUrls.video(server: VixConfig.serverURL, token: AuthSession.shared.api.token, path: normalized, startAt: startAt) else {
+            showAlert("Video no disponible")
+            return
+        }
+        let seek = normalized.lowercased().contains(".mkv") ? 0 : startAt
+        VixUIKitPlayer.playFullscreen(from: self, url: url, startAt: seek) { prog, dur in
+            Task {
+                try? await AuthSession.shared.api.saveWatchProgress(
+                    contentType: "movie", contentId: self.movieId, seriesId: nil, progress: prog, duration: dur
+                )
+            }
+        }
     }
 
     private func showAlert(_ msg: String) {
@@ -1245,6 +1455,8 @@ final class VixEpisodeCell: UITableViewCell {
 
 final class UIKitSeriesDetailViewController: UIViewController, UITableViewDataSource, UITableViewDelegate {
     private let seriesId: Int
+    private let episodeId: Int?
+    private let startAt: Double
     private let table = UITableView(frame: .zero, style: .plain)
     private let headerStack = UIStackView()
     private let hero = UIImageView()
@@ -1256,8 +1468,18 @@ final class UIKitSeriesDetailViewController: UIViewController, UITableViewDataSo
     private let spinner = UIActivityIndicatorView(style: .large)
     private var detail: SeriesDetail?
     private var selectedSeason = 1
+    private let metaRow = UIStackView()
+    private let playButton = UIButton(type: .system)
+    private let similarTitle = UILabel()
+    private let similarScroll = UIScrollView()
+    private let similarStack = UIStackView()
 
-    init(seriesId: Int) { self.seriesId = seriesId; super.init(nibName: nil, bundle: nil) }
+    init(seriesId: Int, episodeId: Int? = nil, startAt: Double = 0) {
+        self.seriesId = seriesId
+        self.episodeId = episodeId
+        self.startAt = startAt
+        super.init(nibName: nil, bundle: nil)
+    }
     required init?(coder: NSCoder) { fatalError() }
 
     override func viewDidLoad() {
@@ -1291,6 +1513,30 @@ final class UIKitSeriesDetailViewController: UIViewController, UITableViewDataSo
         seasonScroll.addSubview(seasonStack)
         seasonScroll.translatesAutoresizingMaskIntoConstraints = false
 
+        metaRow.axis = .horizontal
+        metaRow.spacing = 8
+        playButton.setTitle("  Reproducir episodio", for: .normal)
+        playButton.setImage(UIImage(systemName: "play.fill"), for: .normal)
+        playButton.titleLabel?.font = .boldSystemFont(ofSize: 16)
+        playButton.backgroundColor = VixUITheme.accent
+        playButton.setTitleColor(.black, for: .normal)
+        playButton.tintColor = .black
+        playButton.layer.cornerRadius = 10
+        playButton.contentEdgeInsets = UIEdgeInsets(top: 14, left: 20, bottom: 14, right: 20)
+        playButton.isHidden = true
+        playButton.addTarget(self, action: #selector(playFirstEpisode), for: .touchUpInside)
+        similarTitle.text = "Series similares"
+        similarTitle.font = .boldSystemFont(ofSize: 17)
+        similarTitle.textColor = .white
+        similarTitle.isHidden = true
+        similarScroll.showsHorizontalScrollIndicator = false
+        similarScroll.isHidden = true
+        similarStack.axis = .horizontal
+        similarStack.spacing = 10
+        similarStack.translatesAutoresizingMaskIntoConstraints = false
+        similarScroll.addSubview(similarStack)
+        similarScroll.translatesAutoresizingMaskIntoConstraints = false
+
         let infoRow = UIStackView(arrangedSubviews: [poster, titleLabel])
         infoRow.axis = .horizontal
         infoRow.spacing = 12
@@ -1301,7 +1547,7 @@ final class UIKitSeriesDetailViewController: UIViewController, UITableViewDataSo
         headerStack.isLayoutMarginsRelativeArrangement = true
         headerStack.layoutMargins = UIEdgeInsets(top: 0, left: 0, bottom: 12, right: 0)
         headerStack.addArrangedSubview(hero)
-        let body = UIStackView(arrangedSubviews: [infoRow, synopsisLabel, seasonScroll])
+        let body = UIStackView(arrangedSubviews: [infoRow, metaRow, synopsisLabel, playButton, seasonScroll, similarTitle, similarScroll])
         body.axis = .vertical
         body.spacing = 12
         body.isLayoutMarginsRelativeArrangement = true
@@ -1336,10 +1582,21 @@ final class UIKitSeriesDetailViewController: UIViewController, UITableViewDataSo
             seasonStack.trailingAnchor.constraint(equalTo: seasonScroll.trailingAnchor),
             seasonStack.bottomAnchor.constraint(equalTo: seasonScroll.bottomAnchor),
             seasonStack.heightAnchor.constraint(equalTo: seasonScroll.heightAnchor),
+            similarScroll.heightAnchor.constraint(equalToConstant: 140),
+            similarStack.topAnchor.constraint(equalTo: similarScroll.topAnchor),
+            similarStack.leadingAnchor.constraint(equalTo: similarScroll.leadingAnchor),
+            similarStack.trailingAnchor.constraint(equalTo: similarScroll.trailingAnchor),
+            similarStack.bottomAnchor.constraint(equalTo: similarScroll.bottomAnchor),
+            similarStack.heightAnchor.constraint(equalTo: similarScroll.heightAnchor),
             spinner.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             spinner.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
         load()
+    }
+
+    @objc private func playFirstEpisode() {
+        guard let ep = filteredEpisodes.first else { return }
+        playEpisode(ep, startAt: startAt)
     }
 
     private func wrapHeader(_ stack: UIStackView) -> UIView {
@@ -1380,14 +1637,44 @@ final class UIKitSeriesDetailViewController: UIViewController, UITableViewDataSo
                     self.synopsisLabel.text = d.synopsis ?? "Sin sinopsis disponible."
                     VixImageLoader.load(PlayUrls.poster(d.backdrop ?? d.poster), into: self.hero)
                     VixImageLoader.load(PlayUrls.poster(d.poster ?? d.backdrop), into: self.poster)
-                    if let min = d.episodes.map(\.season).min() { self.selectedSeason = min }
+                    if let eid = self.episodeId, let ep = d.episodes.first(where: { $0.id == eid }) {
+                        self.selectedSeason = ep.season
+                    } else if let min = d.episodes.map(\.season).min() {
+                        self.selectedSeason = min
+                    }
+                    self.metaRow.arrangedSubviews.forEach { $0.removeFromSuperview() }
+                    if let r = d.rating, r > 0 { self.metaRow.addArrangedSubview(VixMetaChip.make("⭐ \(String(format: "%.1f", r))")) }
+                    self.playButton.isHidden = self.filteredEpisodes.isEmpty
+                    self.buildSimilar(d.similar ?? [])
                     self.rebuildSeasonChips()
                     self.table.tableHeaderView = self.wrapHeader(self.headerStack)
                     self.table.reloadData()
+                    if let eid = self.episodeId, let ep = d.episodes.first(where: { $0.id == eid }) {
+                        self.playEpisode(ep, startAt: self.startAt)
+                    }
                 }
             } catch {
-                await MainActor.run { self.spinner.stopAnimating() }
+                await MainActor.run {
+                    self.spinner.stopAnimating()
+                    let a = UIAlertController(title: nil, message: error.localizedDescription, preferredStyle: .alert)
+                    a.addAction(UIAlertAction(title: "OK", style: .default))
+                    self.present(a, animated: true)
+                }
             }
+        }
+    }
+
+    private func buildSimilar(_ items: [CatalogPoster]) {
+        similarStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        guard !items.isEmpty else { return }
+        similarTitle.isHidden = false
+        similarScroll.isHidden = false
+        for item in items.prefix(10) {
+            let card = VixSimilarPosterView(item: item) { [weak self] tapped in
+                self?.navigationController?.pushViewController(UIKitSeriesDetailViewController(seriesId: tapped.id), animated: true)
+            }
+            card.widthAnchor.constraint(equalToConstant: 100).isActive = true
+            similarStack.addArrangedSubview(card)
         }
     }
 
@@ -1427,14 +1714,37 @@ final class UIKitSeriesDetailViewController: UIViewController, UITableViewDataSo
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        let ep = filteredEpisodes[indexPath.row]
-        guard let path = ep.video_path, !path.isEmpty,
-              let url = PlayUrls.video(server: VixConfig.serverURL, token: AuthSession.shared.api.token, path: path) else {
-            let a = UIAlertController(title: nil, message: "Video no disponible", preferredStyle: .alert)
-            a.addAction(UIAlertAction(title: "OK", style: .default))
-            present(a, animated: true)
+        playEpisode(filteredEpisodes[indexPath.row])
+    }
+
+    private func playEpisode(_ ep: SeriesEpisode, startAt: Double = 0) {
+        guard let path = ep.video_path, !path.isEmpty else {
+            showAlert("Video no disponible para este episodio")
             return
         }
-        VixUIKitPlayer.playFullscreen(from: self, url: url)
+        let normalized = PlayUrls.normalizeMediaPath(path)
+        guard let url = PlayUrls.video(
+            server: VixConfig.serverURL,
+            token: AuthSession.shared.api.token,
+            path: normalized,
+            startAt: startAt
+        ) else {
+            showAlert("No se pudo abrir el video")
+            return
+        }
+        let seek = normalized.lowercased().contains(".mkv") ? 0 : startAt
+        VixUIKitPlayer.playFullscreen(from: self, url: url, startAt: seek) { prog, dur in
+            Task {
+                try? await AuthSession.shared.api.saveWatchProgress(
+                    contentType: "episode", contentId: ep.id, seriesId: self.seriesId, progress: prog, duration: dur
+                )
+            }
+        }
+    }
+
+    private func showAlert(_ msg: String) {
+        let a = UIAlertController(title: nil, message: msg, preferredStyle: .alert)
+        a.addAction(UIAlertAction(title: "OK", style: .default))
+        present(a, animated: true)
     }
 }

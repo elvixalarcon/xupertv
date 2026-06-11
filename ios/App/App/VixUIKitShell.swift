@@ -91,13 +91,11 @@ final class UIKitLoginViewController: UIViewController {
         card.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(card)
 
-        let icon = UIImageView(image: UIImage(systemName: "play.tv.fill"))
-        icon.tintColor = VixUITheme.accent
-        icon.contentMode = .scaleAspectFit
+        let icon = VixBrandLogoView()
         icon.translatesAutoresizingMaskIntoConstraints = false
 
         let brand = UILabel()
-        brand.text = "Vix TV"
+        brand.text = "ix TV"
         brand.font = .boldSystemFont(ofSize: 34)
         brand.textColor = .white
         brand.textAlignment = .center
@@ -167,8 +165,8 @@ final class UIKitLoginViewController: UIViewController {
 
             icon.topAnchor.constraint(equalTo: card.topAnchor, constant: 28),
             icon.centerXAnchor.constraint(equalTo: card.centerXAnchor),
-            icon.widthAnchor.constraint(equalToConstant: 56),
-            icon.heightAnchor.constraint(equalToConstant: 56),
+            icon.widthAnchor.constraint(equalToConstant: 72),
+            icon.heightAnchor.constraint(equalToConstant: 72),
 
             brand.topAnchor.constraint(equalTo: icon.bottomAnchor, constant: 12),
             brand.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 22),
@@ -285,47 +283,180 @@ extension UIKitLoginViewController: UITextFieldDelegate {
     }
 }
 
-// MARK: - Profile picker
+// MARK: - Profile picker (Netflix style)
 
-final class UIKitProfilePickerViewController: UIViewController, UITableViewDataSource, UITableViewDelegate {
-    private let table = UITableView(frame: .zero, style: .insetGrouped)
+final class UIKitProfilePickerViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegate, UICollectionViewDelegateFlowLayout {
     private var profiles: [UserProfile] = []
+    private var collectionView: UICollectionView!
+    private let titleLabel = UILabel()
+    private let subtitleLabel = UILabel()
+    private let manageButton = UIButton(type: .system)
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "Elige perfil"
         view.backgroundColor = VixUITheme.bg
-        profiles = AuthSession.shared.profiles
-        table.dataSource = self
-        table.delegate = self
-        table.backgroundColor = .clear
-        table.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(table)
+        navigationController?.setNavigationBarHidden(true, animated: false)
+        titleLabel.text = "¿Quién está viendo?"
+        titleLabel.font = .boldSystemFont(ofSize: 30)
+        titleLabel.textColor = .white
+        titleLabel.textAlignment = .center
+        subtitleLabel.text = "Cada perfil tiene su lista, favoritos y progreso"
+        subtitleLabel.font = .systemFont(ofSize: 15)
+        subtitleLabel.textColor = VixUITheme.muted
+        subtitleLabel.textAlignment = .center
+        subtitleLabel.numberOfLines = 0
+        manageButton.setTitle("Administrar perfiles", for: .normal)
+        manageButton.setTitleColor(VixUITheme.muted, for: .normal)
+        manageButton.addTarget(self, action: #selector(toggleManage), for: .touchUpInside)
+        let layout = UICollectionViewFlowLayout()
+        layout.minimumInteritemSpacing = 20
+        layout.minimumLineSpacing = 24
+        layout.sectionInset = UIEdgeInsets(top: 16, left: 24, bottom: 24, right: 24)
+        collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        collectionView.backgroundColor = .clear
+        collectionView.dataSource = self
+        collectionView.delegate = self
+        collectionView.register(VixProfileAvatarCell.self, forCellWithReuseIdentifier: VixProfileAvatarCell.reuseId)
+        [titleLabel, subtitleLabel, collectionView, manageButton].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+            view.addSubview($0)
+        }
         NSLayoutConstraint.activate([
-            table.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            table.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            table.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            table.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 32),
+            titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            titleLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 8),
+            subtitleLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+            subtitleLabel.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
+            collectionView.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 24),
+            collectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            collectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            collectionView.bottomAnchor.constraint(equalTo: manageButton.topAnchor, constant: -12),
+            manageButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
+            manageButton.centerXAnchor.constraint(equalTo: view.centerXAnchor)
         ])
+        reloadProfiles()
     }
 
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { profiles.count }
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        reloadProfiles()
+    }
 
-    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "p") ?? UITableViewCell(style: .subtitle, reuseIdentifier: "p")
-        let p = profiles[indexPath.row]
-        cell.textLabel?.text = p.name
-        cell.detailTextLabel?.text = p.is_kids ? "Kids" : nil
-        cell.backgroundColor = VixUITheme.card
-        cell.textLabel?.textColor = .white
+    private func reloadProfiles() {
+        Task {
+            let list = (try? await AuthSession.shared.api.listProfiles()) ?? AuthSession.shared.profiles
+            await MainActor.run {
+                self.profiles = list
+                AuthSession.shared.profiles = list
+                self.collectionView?.reloadData()
+            }
+        }
+    }
+
+    @objc private func toggleManage() {
+        let sheet = UIAlertController(title: "Perfiles", message: nil, preferredStyle: .actionSheet)
+        sheet.addAction(UIAlertAction(title: "Agregar perfil", style: .default) { _ in self.promptCreateProfile() })
+        if profiles.count > 1 {
+            sheet.addAction(UIAlertAction(title: "Eliminar un perfil", style: .destructive) { _ in self.promptDeleteProfile() })
+        }
+        sheet.addAction(UIAlertAction(title: "Cancelar", style: .cancel))
+        if let pop = sheet.popoverPresentationController { pop.sourceView = manageButton }
+        present(sheet, animated: true)
+    }
+
+    private func promptCreateProfile() {
+        let alert = UIAlertController(title: "Nuevo perfil", message: nil, preferredStyle: .alert)
+        alert.addTextField { $0.placeholder = "Nombre" }
+        alert.addAction(UIAlertAction(title: "Cancelar", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Infantil (Kids)", style: .default) { _ in
+            self.promptKidsPin(name: alert.textFields?.first?.text ?? "")
+        })
+        alert.addAction(UIAlertAction(title: "Adulto", style: .default) { _ in
+            self.createProfile(name: alert.textFields?.first?.text ?? "", isKids: false, pin: nil)
+        })
+        present(alert, animated: true)
+    }
+
+    private func promptKidsPin(name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let alert = UIAlertController(title: "PIN parental", message: "PIN de 4 dígitos para salir del perfil infantil", preferredStyle: .alert)
+        alert.addTextField { $0.isSecureTextEntry = true; $0.keyboardType = .numberPad; $0.placeholder = "••••" }
+        alert.addAction(UIAlertAction(title: "Cancelar", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Crear", style: .default) { _ in
+            self.createProfile(name: trimmed, isKids: true, pin: alert.textFields?.first?.text)
+        })
+        present(alert, animated: true)
+    }
+
+    private func createProfile(name: String, isKids: Bool, pin: String?) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        Task {
+            do {
+                if profiles.isEmpty {
+                    let result = try await AuthSession.shared.api.setupProfile(name: trimmed, isKids: isKids, pin: pin)
+                    await MainActor.run {
+                        AuthSession.shared.api.saveToken(result.token)
+                        AuthSession.shared.currentProfile = result.profile
+                        AuthSession.shared.needsProfilePick = false
+                        VixAppRouter.showMain(from: self.navigationController)
+                    }
+                } else {
+                    _ = try await AuthSession.shared.api.createProfile(name: trimmed, isKids: isKids, pin: pin)
+                    await MainActor.run { self.reloadProfiles() }
+                }
+            } catch {
+                await MainActor.run { self.showError(error.localizedDescription) }
+            }
+        }
+    }
+
+    private func promptDeleteProfile() {
+        let alert = UIAlertController(title: "Eliminar perfil", message: "Elige cuál eliminar", preferredStyle: .actionSheet)
+        for p in profiles {
+            alert.addAction(UIAlertAction(title: p.name, style: .destructive) { _ in
+                Task {
+                    try? await AuthSession.shared.api.deleteProfile(id: p.id)
+                    await MainActor.run { self.reloadProfiles() }
+                }
+            })
+        }
+        alert.addAction(UIAlertAction(title: "Cancelar", style: .cancel))
+        if let pop = alert.popoverPresentationController { pop.sourceView = manageButton }
+        present(alert, animated: true)
+    }
+
+    func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+        profiles.count + (profiles.count < 5 ? 1 : 0)
+    }
+
+    func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: VixProfileAvatarCell.reuseId, for: indexPath) as! VixProfileAvatarCell
+        if indexPath.item < profiles.count {
+            cell.configure(profile: profiles[indexPath.item])
+        } else {
+            cell.configureAdd()
+        }
         return cell
     }
 
-    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        tableView.deselectRow(at: indexPath, animated: true)
-        let profile = profiles[indexPath.row]
+    func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        if indexPath.item >= profiles.count {
+            promptCreateProfile()
+            return
+        }
+        let profile = profiles[indexPath.item]
         if profile.is_kids { promptPin(for: profile) }
         else { select(profile: profile, pin: nil) }
+    }
+
+    func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
+        let w = min(collectionView.bounds.width - 48, 420)
+        let cols: CGFloat = collectionView.bounds.width > 500 ? 4 : 2
+        let side = (w - (cols - 1) * 20) / cols
+        return CGSize(width: side, height: side + 28)
     }
 
     private func promptPin(for profile: UserProfile) {
@@ -344,13 +475,91 @@ final class UIKitProfilePickerViewController: UIViewController, UITableViewDataS
                 try await AuthSession.shared.selectProfile(profileId: profile.id, pin: pin)
                 await MainActor.run { VixAppRouter.showMain(from: self.navigationController) }
             } catch {
-                await MainActor.run {
-                    let a = UIAlertController(title: "Error", message: error.localizedDescription, preferredStyle: .alert)
-                    a.addAction(UIAlertAction(title: "OK", style: .default))
-                    self.present(a, animated: true)
-                }
+                await MainActor.run { self.showError(error.localizedDescription) }
             }
         }
+    }
+
+    private func showError(_ msg: String) {
+        let a = UIAlertController(title: "Error", message: msg, preferredStyle: .alert)
+        a.addAction(UIAlertAction(title: "OK", style: .default))
+        present(a, animated: true)
+    }
+}
+
+final class VixProfileAvatarCell: UICollectionViewCell {
+    static let reuseId = "profileAvatar"
+    private let circle = UIView()
+    private let initial = UILabel()
+    private let nameLabel = UILabel()
+    private let badge = UILabel()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        circle.layer.cornerRadius = 8
+        circle.translatesAutoresizingMaskIntoConstraints = false
+        initial.font = .boldSystemFont(ofSize: 36)
+        initial.textColor = .white
+        initial.textAlignment = .center
+        initial.translatesAutoresizingMaskIntoConstraints = false
+        nameLabel.font = .systemFont(ofSize: 14, weight: .medium)
+        nameLabel.textColor = VixUITheme.muted
+        nameLabel.textAlignment = .center
+        nameLabel.translatesAutoresizingMaskIntoConstraints = false
+        badge.font = .systemFont(ofSize: 10, weight: .bold)
+        badge.textColor = .black
+        badge.backgroundColor = VixUITheme.accent
+        badge.text = " KIDS "
+        badge.layer.cornerRadius = 4
+        badge.clipsToBounds = true
+        badge.isHidden = true
+        badge.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(circle)
+        circle.addSubview(initial)
+        contentView.addSubview(nameLabel)
+        contentView.addSubview(badge)
+        NSLayoutConstraint.activate([
+            circle.topAnchor.constraint(equalTo: contentView.topAnchor),
+            circle.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            circle.widthAnchor.constraint(equalTo: contentView.widthAnchor, multiplier: 0.85),
+            circle.heightAnchor.constraint(equalTo: circle.widthAnchor),
+            initial.centerXAnchor.constraint(equalTo: circle.centerXAnchor),
+            initial.centerYAnchor.constraint(equalTo: circle.centerYAnchor),
+            nameLabel.topAnchor.constraint(equalTo: circle.bottomAnchor, constant: 8),
+            nameLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            nameLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            badge.topAnchor.constraint(equalTo: circle.topAnchor, constant: 6),
+            badge.trailingAnchor.constraint(equalTo: circle.trailingAnchor, constant: -6)
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    func configure(profile: UserProfile) {
+        let color = UIColor(hex: profile.avatar_color ?? "#7c3aed") ?? VixUITheme.accent
+        circle.backgroundColor = color
+        initial.text = String(profile.name.prefix(1)).uppercased()
+        nameLabel.text = profile.name
+        badge.isHidden = !profile.is_kids
+        initial.text = profile.is_kids ? "👶" : String(profile.name.prefix(1)).uppercased()
+    }
+
+    func configureAdd() {
+        circle.backgroundColor = VixUITheme.card
+        circle.layer.borderWidth = 2
+        circle.layer.borderColor = VixUITheme.muted.withAlphaComponent(0.35).cgColor
+        initial.text = "+"
+        nameLabel.text = "Agregar"
+        badge.isHidden = true
+    }
+}
+
+private extension UIColor {
+    convenience init?(hex: String) {
+        var s = hex.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        if s.hasPrefix("#") { s.removeFirst() }
+        guard s.count == 6, let v = Int(s, radix: 16) else { return nil }
+        self.init(red: CGFloat((v >> 16) & 0xFF) / 255, green: CGFloat((v >> 8) & 0xFF) / 255, blue: CGFloat(v & 0xFF) / 255, alpha: 1)
     }
 }
 
@@ -389,7 +598,7 @@ final class UIKitMainTabController: UITabBarController, UITabBarControllerDelega
 // MARK: - Perfil (favoritos + historial)
 
 final class UIKitProfileViewController: UIViewController {
-    private let segmented = UISegmentedControl(items: ["Favoritos", "Historial", "Continuar"])
+    private let segmented = UISegmentedControl(items: ["Favoritos", "Ya miré", "Seguir viendo"])
     private let table = UITableView(frame: .zero, style: .plain)
     private var favorites: [LibraryItem] = []
     private var history: [WatchItem] = []
@@ -412,11 +621,16 @@ final class UIKitProfileViewController: UIViewController {
         headerStack.alignment = .leading
         if let p = AuthSession.shared.currentProfile {
             let sub = UILabel()
-            sub.text = p.name
+            sub.text = p.name + (p.is_kids ? " · Kids" : "")
             sub.font = .systemFont(ofSize: 15)
             sub.textColor = VixUITheme.muted
             headerStack.addArrangedSubview(sub)
         }
+        let switchProfile = UIButton(type: .system)
+        switchProfile.setTitle("Cambiar perfil", for: .normal)
+        switchProfile.setTitleColor(VixUITheme.accent, for: .normal)
+        switchProfile.addTarget(self, action: #selector(switchProfileTapped), for: .touchUpInside)
+        headerStack.addArrangedSubview(switchProfile)
         headerStack.translatesAutoresizingMaskIntoConstraints = false
 
         segmented.selectedSegmentIndex = 0
@@ -470,6 +684,12 @@ final class UIKitProfileViewController: UIViewController {
     }
 
     @objc private func tabChanged() { table.reloadData() }
+
+    @objc private func switchProfileTapped() {
+        let picker = UIKitProfilePickerViewController()
+        picker.modalPresentationStyle = .fullScreen
+        present(UINavigationController(rootViewController: picker), animated: true)
+    }
 
     private func load() {
         spinner.startAnimating()
@@ -552,7 +772,30 @@ extension UIKitProfileViewController: UITableViewDataSource, UITableViewDelegate
 
     private func openWatch(_ item: WatchItem) {
         if item.content_type == "episode", let sid = item.series_id {
-            navigationController?.pushViewController(UIKitSeriesDetailViewController(seriesId: sid), animated: true)
+            if let path = item.video_path, !path.isEmpty,
+               let url = PlayUrls.video(server: VixConfig.serverURL, token: AuthSession.shared.api.token, path: PlayUrls.normalizeMediaPath(path), startAt: item.progress ?? 0) {
+                VixUIKitPlayer.playFullscreen(from: self, url: url, startAt: item.progress ?? 0) { prog, dur in
+                    Task {
+                        try? await AuthSession.shared.api.saveWatchProgress(
+                            contentType: "episode", contentId: item.content_id, seriesId: sid, progress: prog, duration: dur
+                        )
+                    }
+                }
+            } else {
+                navigationController?.pushViewController(
+                    UIKitSeriesDetailViewController(seriesId: sid, episodeId: item.content_id, startAt: item.progress ?? 0),
+                    animated: true
+                )
+            }
+        } else if let path = item.video_path, !path.isEmpty,
+                  let url = PlayUrls.video(server: VixConfig.serverURL, token: AuthSession.shared.api.token, path: PlayUrls.normalizeMediaPath(path), startAt: item.progress ?? 0) {
+            VixUIKitPlayer.playFullscreen(from: self, url: url, startAt: item.progress ?? 0) { prog, dur in
+                Task {
+                    try? await AuthSession.shared.api.saveWatchProgress(
+                        contentType: "movie", contentId: item.content_id, seriesId: nil, progress: prog, duration: dur
+                    )
+                }
+            }
         } else {
             navigationController?.pushViewController(
                 UIKitMovieDetailViewController(movieId: item.content_id, startAt: item.progress ?? 0),

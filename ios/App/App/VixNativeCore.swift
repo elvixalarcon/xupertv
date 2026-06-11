@@ -40,19 +40,21 @@ struct CatalogPoster: Identifiable, Decodable, Hashable {
     let title: String
     let poster: String?
     let content_type: String?
+    let rating: Double?
 
     var mediaType: String { content_type ?? "movie" }
     var isSeries: Bool { mediaType == "series" }
 
     enum CodingKeys: String, CodingKey {
-        case id, title, poster, content_type, type
+        case id, title, poster, content_type, type, rating
     }
 
-    init(id: Int, title: String, poster: String?, content_type: String?) {
+    init(id: Int, title: String, poster: String?, content_type: String?, rating: Double? = nil) {
         self.id = id
         self.title = title
         self.poster = poster
         self.content_type = content_type
+        self.rating = rating
     }
 
     init(from decoder: Decoder) throws {
@@ -62,18 +64,55 @@ struct CatalogPoster: Identifiable, Decodable, Hashable {
         poster = try? c.decode(String.self, forKey: .poster)
         content_type = (try? c.decode(String.self, forKey: .content_type))
             ?? (try? c.decode(String.self, forKey: .type))
+        if let r = try? c.decode(Double.self, forKey: .rating) {
+            rating = r
+        } else if let r = try? c.decode(Int.self, forKey: .rating) {
+            rating = Double(r)
+        } else {
+            rating = nil
+        }
     }
 }
 
 struct CatalogSection: Identifiable, Decodable {
     let id: String
     let title: String
+    let subtitle: String?
     let items: [CatalogPoster]
 
-    init(id: String, title: String, items: [CatalogPoster]) {
+    init(id: String, title: String, subtitle: String? = nil, items: [CatalogPoster]) {
         self.id = id
         self.title = title
+        self.subtitle = subtitle
         self.items = items
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, subtitle, items
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        title = try c.decode(String.self, forKey: .title)
+        subtitle = try? c.decode(String.self, forKey: .subtitle)
+        items = (try? c.decode([CatalogPoster].self, forKey: .items)) ?? []
+    }
+}
+
+struct HomeCatalogItem: Hashable {
+    let key: String
+    let poster: CatalogPoster
+    let progress: Double?
+    let duration: Double?
+    let watch: WatchItem?
+
+    init(key: String, poster: CatalogPoster, progress: Double?, duration: Double?, watch: WatchItem? = nil) {
+        self.key = key
+        self.poster = poster
+        self.progress = progress
+        self.duration = duration
+        self.watch = watch
     }
 }
 
@@ -149,8 +188,31 @@ struct SeriesDetail: Decodable {
     let poster: String?
     let backdrop: String?
     let synopsis: String?
+    let rating: Double?
     let episodes: [SeriesEpisode]
     let similar: [CatalogPoster]?
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, poster, backdrop, synopsis, rating, episodes, similar
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(Int.self, forKey: .id)
+        title = try c.decode(String.self, forKey: .title)
+        poster = try? c.decode(String.self, forKey: .poster)
+        backdrop = try? c.decode(String.self, forKey: .backdrop)
+        synopsis = try? c.decode(String.self, forKey: .synopsis)
+        if let r = try? c.decode(Double.self, forKey: .rating) {
+            rating = r
+        } else if let r = try? c.decode(Int.self, forKey: .rating) {
+            rating = Double(r)
+        } else {
+            rating = nil
+        }
+        episodes = (try? c.decode([SeriesEpisode].self, forKey: .episodes)) ?? []
+        similar = try? c.decode([CatalogPoster].self, forKey: .similar)
+    }
 }
 
 struct SearchItem: Identifiable, Decodable, Hashable {
@@ -224,8 +286,22 @@ enum PlayUrls {
         return URL(string: p.hasPrefix("/") ? base + p : base + "/" + p)
     }
 
+    static func normalizeMediaPath(_ path: String) -> String {
+        var p = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !p.isEmpty else { return p }
+        if p.hasPrefix("http://") || p.hasPrefix("https://") { return p }
+        if !p.hasPrefix("/") { p = "/" + p }
+        if !p.hasPrefix("/uploads/") {
+            if p.hasPrefix("/movies/") || p.hasPrefix("/series/") || p.hasPrefix("/winscp/") {
+                p = "/uploads" + p
+            }
+        }
+        return p
+    }
+
     static func video(server: String, token: String, path: String, startAt: Double = 0) -> URL? {
-        let base = path.split(separator: "?").first.map(String.init) ?? path
+        let normalized = normalizeMediaPath(path)
+        let base = normalized.split(separator: "?").first.map(String.init) ?? normalized
         if base.hasPrefix("http://") || base.hasPrefix("https://") {
             let enc = base.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? base
             let tok = token.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? token
@@ -350,6 +426,29 @@ final class VixAPI {
         return try JSONDecoder().decode([UserProfile].self, from: data)
     }
 
+    func createProfile(name: String, isKids: Bool, pin: String?) async throws -> UserProfile {
+        var payload: [String: Any] = ["name": name, "is_kids": isKids]
+        if let pin, !pin.isEmpty { payload["pin"] = pin }
+        let body = try JSONSerialization.data(withJSONObject: payload)
+        let data = try await request(path: "/api/profiles", method: "POST", body: body)
+        return try JSONDecoder().decode(UserProfile.self, from: data)
+    }
+
+    func setupProfile(name: String, isKids: Bool, pin: String?) async throws -> (token: String, profile: UserProfile?) {
+        var payload: [String: Any] = ["name": name, "is_kids": isKids]
+        if let pin, !pin.isEmpty { payload["pin"] = pin }
+        let body = try JSONSerialization.data(withJSONObject: payload)
+        let data = try await request(path: "/api/profiles/setup", method: "POST", body: body)
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let tok = json["token"] as? String else { throw VixAPIError.invalid }
+        saveToken(tok)
+        return (tok, decodeProfile(json["profile"]))
+    }
+
+    func deleteProfile(id: Int) async throws {
+        _ = try await request(path: "/api/profiles/\(id)", method: "DELETE")
+    }
+
     private func decodeProfiles(_ raw: Any?) -> [UserProfile] {
         guard let arr = raw as? [[String: Any]] else { return [] }
         return arr.compactMap { decodeProfile($0) }
@@ -415,7 +514,8 @@ final class VixAPI {
             let raw = (row[listKey] as? [[String: Any]]) ?? []
             let items: [CatalogPoster] = raw.compactMap { d in
                 guard let id = d["id"] as? Int, let title = d["title"] as? String else { return nil }
-                return CatalogPoster(id: id, title: title, poster: d["poster"] as? String, content_type: contentType)
+                let rating = (d["rating"] as? Double) ?? (d["rating"] as? Int).map(Double.init)
+                return CatalogPoster(id: id, title: title, poster: d["poster"] as? String, content_type: contentType, rating: rating)
             }
             guard !items.isEmpty else { return nil }
             return CatalogSection(id: "\(contentType)-\(genre)", title: genre, items: items)
