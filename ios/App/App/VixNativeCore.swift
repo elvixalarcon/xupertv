@@ -48,6 +48,13 @@ struct CatalogPoster: Identifiable, Decodable, Hashable {
         case id, title, poster, content_type, type
     }
 
+    init(id: Int, title: String, poster: String?, content_type: String?) {
+        self.id = id
+        self.title = title
+        self.poster = poster
+        self.content_type = content_type
+    }
+
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(Int.self, forKey: .id)
@@ -66,6 +73,26 @@ struct CatalogSection: Identifiable, Decodable {
 
 struct CatalogHome: Decodable {
     let sections: [CatalogSection]?
+}
+
+struct HeroSlide: Identifiable, Decodable {
+    let id: Int
+    let title: String
+    let poster: String?
+    let backdrop: String?
+    let trailer: String?
+    let content_type: String?
+    let description: String?
+    let rating: Double?
+
+    var mediaType: String { content_type ?? "movie" }
+    var isSeries: Bool { mediaType == "series" }
+}
+
+struct TrailerPlayInfo: Decodable {
+    let playUrl: String
+    let mime: String?
+    let title: String?
 }
 
 struct StorefrontPage: Decodable {
@@ -343,6 +370,31 @@ final class VixAPI {
     func catalogHome() async throws -> CatalogHome {
         let data = try await request(path: "/api/catalog/home")
         return try JSONDecoder().decode(CatalogHome.self, from: data)
+    }
+
+    func catalogHero() async throws -> [HeroSlide] {
+        let data = try await request(path: "/api/catalog/hero")
+        return try JSONDecoder().decode([HeroSlide].self, from: data)
+    }
+
+    func trailerPlayURL(youtubeKey: String) async throws -> URL {
+        let key = Self.normalizeYoutubeKey(youtubeKey)
+        guard !key.isEmpty else { throw VixAPIError.invalid }
+        let enc = key.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? key
+        let data = try await request(path: "/api/trailers/youtube/\(enc)")
+        let info = try JSONDecoder().decode(TrailerPlayInfo.self, from: data)
+        if info.playUrl.hasPrefix("http") { return URL(string: info.playUrl)! }
+        return URL(string: VixConfig.serverURL + info.playUrl)!
+    }
+
+    static func normalizeYoutubeKey(_ raw: String) -> String {
+        let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if s.count == 11, s.range(of: #"^[A-Za-z0-9_-]+$"#, options: .regularExpression) != nil { return s }
+        let pattern = #"(?:youtu\.be/|youtube\.com/(?:embed/|v/|shorts/|live/|watch\?(?:[^&]*&)*v=))([A-Za-z0-9_-]{11})"#
+        guard let re = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
+              let m = re.firstMatch(in: s, range: NSRange(s.startIndex..., in: s)),
+              let r = Range(m.range(at: 1), in: s) else { return "" }
+        return String(s[r])
     }
 
     func storefront(slug: String) async throws -> StorefrontPage {
