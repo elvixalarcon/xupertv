@@ -16,7 +16,6 @@ struct NativeRootView: View {
                 MainTabView()
             }
         }
-        .preferredColorScheme(.dark)
     }
 }
 

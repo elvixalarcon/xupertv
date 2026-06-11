@@ -13,6 +13,7 @@
 		VIXNAT003A1B2C3D4E5F6789 /* VixNativeCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = VIXNAT001A1B2C3D4E5F6789 /* VixNativeCore.swift */; };
 		VIXNAT004A1B2C3D4E5F6789 /* VixNativeViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = VIXNAT002A1B2C3D4E5F6789 /* VixNativeViews.swift */; };
 		VIXNAT006A1B2C3D4E5F6789 /* VixNativeExtras.swift in Sources */ = {isa = PBXBuildFile; fileRef = VIXNAT005A1B2C3D4E5F6789 /* VixNativeExtras.swift */; };
+		VIXAPP001A1B2C3D4E5F6789 /* VixTVApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = VIXAPP002A1B2C3D4E5F6789 /* VixTVApp.swift */; };
 		504EC30D1FED79650016851F /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30B1FED79650016851F /* Main.storyboard */; };
 		504EC30F1FED79650016851F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30E1FED79650016851F /* Assets.xcassets */; };
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
@@ -28,6 +29,7 @@
 		VIXNAT001A1B2C3D4E5F6789 /* VixNativeCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VixNativeCore.swift; sourceTree = "<group>"; };
 		VIXNAT002A1B2C3D4E5F6789 /* VixNativeViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VixNativeViews.swift; sourceTree = "<group>"; };
 		VIXNAT005A1B2C3D4E5F6789 /* VixNativeExtras.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VixNativeExtras.swift; sourceTree = "<group>"; };
+		VIXAPP002A1B2C3D4E5F6789 /* VixTVApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VixTVApp.swift; sourceTree = "<group>"; };
 		504EC30C1FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		504EC30E1FED79650016851F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		504EC3111FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
@@ -84,6 +86,7 @@
 				VIXNAT001A1B2C3D4E5F6789 /* VixNativeCore.swift */,
 				VIXNAT002A1B2C3D4E5F6789 /* VixNativeViews.swift */,
 				VIXNAT005A1B2C3D4E5F6789 /* VixNativeExtras.swift */,
+				VIXAPP002A1B2C3D4E5F6789 /* VixTVApp.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
@@ -222,6 +225,7 @@
 				VIXNAT003A1B2C3D4E5F6789 /* VixNativeCore.swift in Sources */,
 				VIXNAT004A1B2C3D4E5F6789 /* VixNativeViews.swift in Sources */,
 				VIXNAT006A1B2C3D4E5F6789 /* VixNativeExtras.swift in Sources */,
+				VIXAPP001A1B2C3D4E5F6789 /* VixTVApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -360,11 +364,11 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 1.0.52;
+				MARKETING_VERSION = 1.0.53;
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" \"-DDEBUG\"";
 				PRODUCT_BUNDLE_IDENTIFIER = tv.vix.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -380,11 +384,11 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 1.0.52;
+				MARKETING_VERSION = 1.0.53;
 				PRODUCT_BUNDLE_IDENTIFIER = tv.vix.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
