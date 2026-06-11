@@ -951,7 +951,10 @@ final class UIKitLiveViewController: UIViewController {
     private var channels: [LiveChannel] = []
     private var categories: [LiveCategory] = []
     private var selectedGroup = "all"
+    private var playingChannelId: Int?
     private let spinner = UIActivityIndicatorView(style: .large)
+
+    private static let lastLiveChannelKey = "vix_last_live_channel_id"
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -1023,6 +1026,9 @@ final class UIKitLiveViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         VixLivePlayback.current = self
+        if livePlayer == nil, !channels.isEmpty {
+            playRandomChannel()
+        }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -1091,10 +1097,34 @@ final class UIKitLiveViewController: UIViewController {
                     self.channels = ch
                     self.table.reloadData()
                     self.spinner.stopAnimating()
+                    self.playRandomChannel()
                 }
             } catch {
                 await MainActor.run { self.spinner.stopAnimating() }
             }
+        }
+    }
+
+    private func playRandomChannel() {
+        guard !channels.isEmpty else { return }
+        let lastId = UserDefaults.standard.integer(forKey: Self.lastLiveChannelKey)
+        if lastId > 0, let idx = channels.firstIndex(where: { $0.id == lastId }) {
+            tuneChannel(channels[idx], at: idx)
+            return
+        }
+        let idx = Int.random(in: 0..<channels.count)
+        tuneChannel(channels[idx], at: idx)
+    }
+
+    private func tuneChannel(_ ch: LiveChannel, at index: Int) {
+        guard let url = PlayUrls.live(server: VixConfig.serverURL, token: AuthSession.shared.api.token, channelId: ch.id) else { return }
+        playingChannelId = ch.id
+        UserDefaults.standard.set(ch.id, forKey: Self.lastLiveChannelKey)
+        playerVC.view.isHidden = false
+        VixUIKitPlayer.attachLive(player: &livePlayer, playerVC: playerVC, url: url)
+        let path = IndexPath(row: index, section: 0)
+        if table.numberOfRows(inSection: 0) > index {
+            table.selectRow(at: path, animated: true, scrollPosition: .middle)
         }
     }
 }
@@ -1109,11 +1139,13 @@ extension UIKitLiveViewController: UITableViewDataSource, UITableViewDelegate {
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        tableView.deselectRow(at: indexPath, animated: true)
-        let ch = channels[indexPath.row]
-        guard let url = PlayUrls.live(server: VixConfig.serverURL, token: AuthSession.shared.api.token, channelId: ch.id) else { return }
-        playerVC.view.isHidden = false
-        VixUIKitPlayer.attachLive(player: &livePlayer, playerVC: playerVC, url: url)
+        tuneChannel(channels[indexPath.row], at: indexPath.row)
+    }
+
+    func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
+        let selected = playingChannelId == channels[indexPath.row].id
+        cell.accessoryType = selected ? .checkmark : .none
+        cell.tintColor = VixUITheme.accent
     }
 }
 
