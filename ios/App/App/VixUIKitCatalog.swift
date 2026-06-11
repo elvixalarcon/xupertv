@@ -528,7 +528,7 @@ final class VixTabCell: UICollectionViewCell {
     }
 }
 
-private struct HomeTab: Hashable {
+struct HomeTab: Hashable {
     let slug: String
     let title: String
 }
