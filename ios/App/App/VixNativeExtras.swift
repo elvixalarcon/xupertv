@@ -576,12 +576,7 @@ struct MovieDetailView: View {
             set: { if !$0 { showPlayer = false } }
         )) {
             if let p = playerCtrl.player {
-                NativePlayerScreen(player: p)
-                    .ignoresSafeArea()
-                    .overlay(alignment: .topTrailing) {
-                        Button("Cerrar") { showPlayer = false }
-                            .padding().foregroundColor(.white)
-                    }
+                FullscreenPlayerWrapper(player: p) { showPlayer = false }
             }
         }
     }
@@ -748,12 +743,7 @@ struct SeriesDetailView: View {
             set: { if !$0 { showPlayer = false } }
         )) {
             if let p = playerCtrl.player {
-                NativePlayerScreen(player: p)
-                    .ignoresSafeArea()
-                    .overlay(alignment: .topTrailing) {
-                        Button("Cerrar") { showPlayer = false }
-                            .padding().foregroundColor(.white)
-                    }
+                FullscreenPlayerWrapper(player: p) { showPlayer = false }
             }
         }
     }
@@ -802,6 +792,24 @@ struct SeriesDetailView: View {
                 await MainActor.run { liked = active }
             }
         }
+    }
+}
+
+// MARK: - Fullscreen player wrapper
+
+struct FullscreenPlayerWrapper: View {
+    let player: AVPlayer
+    let onClose: () -> Void
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            NativePlayerScreen(player: player)
+                .edgesIgnoringSafeArea(.all)
+            Button("Cerrar", action: onClose)
+                .padding()
+                .foregroundColor(.white)
+        }
+        .background(Color.black.edgesIgnoringSafeArea(.all))
     }
 }
 

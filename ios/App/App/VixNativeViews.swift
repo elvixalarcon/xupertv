@@ -381,13 +381,9 @@ struct LiveNativeView: View {
             .onAppear { loadInitial() }
             .fullScreenCover(isPresented: $showFullscreen) {
                 if let p = playerCtrl.player {
-                    NativePlayerScreen(player: p)
-                        .ignoresSafeArea()
-                        .overlay(alignment: .topTrailing) {
-                            Button("Cerrar") { showFullscreen = false }
-                                .padding()
-                                .foregroundColor(.white)
-                        }
+                    FullscreenPlayerWrapper(player: p) {
+                        showFullscreen = false
+                    }
                 }
             }
         }
@@ -493,7 +489,10 @@ struct SettingsNativeView: View {
                             Circle()
                                 .fill(Color(hex: profile.avatar_color) ?? .red)
                                 .frame(width: 36, height: 36)
-                                .overlay(Text(String(profile.name.prefix(1)).uppercased().foregroundColor(.white))
+                                .overlay(
+                                    Text(String(profile.name.prefix(1)).uppercased())
+                                        .foregroundColor(.white)
+                                )
                             Text(profile.name)
                             if profile.is_kids {
                                 Spacer()
