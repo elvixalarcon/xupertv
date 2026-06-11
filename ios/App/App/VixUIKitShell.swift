@@ -367,11 +367,8 @@ final class UIKitLiveViewController: UIViewController, UITableViewDataSource, UI
         spinner.startAnimating()
         Task {
             do {
-                async let cats = AuthSession.shared.api.liveCategories()
-                async let chs = AuthSession.shared.api.liveChannels()
-                let (c, ch) = try await (cats, chs)
+                let ch = try await AuthSession.shared.api.liveChannels()
                 await MainActor.run {
-                    self.categories = c
                     self.channels = ch
                     self.table.reloadData()
                     self.spinner.stopAnimating()
@@ -424,22 +421,22 @@ final class UIKitSettingsViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
-        let logout = UIButton(type: .system)
-        logout.setTitle("Cerrar sesión", for: .normal)
-        logout.setTitleColor(.systemRed, for: .normal)
-        logout.addTarget(self, action: #selector(logout), for: .touchUpInside)
-        logout.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(logout)
+        let logoutButton = UIButton(type: .system)
+        logoutButton.setTitle("Cerrar sesión", for: .normal)
+        logoutButton.setTitleColor(.systemRed, for: .normal)
+        logoutButton.addTarget(self, action: #selector(doLogout), for: .touchUpInside)
+        logoutButton.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(logoutButton)
         NSLayoutConstraint.activate([
-            logout.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            logout.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+            logoutButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            logoutButton.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
         if let p = AuthSession.shared.currentProfile {
             navigationItem.prompt = "Perfil: \(p.name)"
         }
     }
 
-    @objc private func logout() {
+    @objc private func doLogout() {
         AuthSession.shared.logout()
         let nav = UINavigationController(rootViewController: UIKitLoginViewController())
         view.window?.rootViewController = nav
