@@ -1,5 +1,4 @@
-# Compila IPA sin firmar en macOS (gratis en GitHub Actions).
-# El IPA se publica como artefacto; súbelo a data/ipa/ en el servidor para /ipa/ios
+# Compila IPA nativo SwiftUI sin firmar (GitHub Actions macOS).
 name: iOS IPA (unsigned)
 
 on:
@@ -8,9 +7,6 @@ on:
     branches: [main, master]
     paths:
       - 'ios/**'
-      - 'public/**'
-      - 'capacitor.config.json'
-      - 'package.json'
       - '.github/workflows/ios-ipa.yml'
 
 jobs:
@@ -18,22 +14,6 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: npm
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Capacitor sync iOS
-        run: npx cap sync ios
-
-      - name: CocoaPods
-        run: |
-          cd ios/App
-          pod install
 
       - name: Build unsigned IPA
         run: |

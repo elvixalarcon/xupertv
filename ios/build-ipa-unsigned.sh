@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Compila Vix TV para iOS SIN firmar → IPA listo para eSign / AltStore / Sideloadly.
-# Requiere: macOS, Xcode 15+, CocoaPods, Node 18+
+# Compila Vix TV iOS nativo SIN firmar → IPA para eSign.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -8,34 +7,24 @@ IOS_APP="$ROOT/ios/App"
 OUT_DIR="$ROOT/data/ipa"
 IPA_NAME="VixTV.ipa"
 SCHEME="App"
-WORKSPACE="$IOS_APP/App.xcworkspace"
+PROJECT="$IOS_APP/App.xcodeproj"
 
-echo "==> Vix TV — IPA sin firmar (para eSign)"
+echo "==> Vix TV — IPA nativo sin firmar (eSign)"
 cd "$ROOT"
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
   echo "Error: este script solo corre en macOS (o GitHub Actions macos-latest)."
-  echo "En Linux usa: .github/workflows/ios-ipa.yml en GitHub Actions."
   exit 1
 fi
 
 command -v xcodebuild >/dev/null || { echo "Instala Xcode"; exit 1; }
-command -v pod >/dev/null || { echo "Instala CocoaPods: sudo gem install cocoapods"; exit 1; }
-
-echo "==> npm install + cap sync ios"
-npm install
-npx cap sync ios
-
-echo "==> pod install"
-cd "$IOS_APP"
-pod install
 
 BUILD_DIR="$IOS_APP/build"
 rm -rf "$BUILD_DIR" Payload "$OUT_DIR/$IPA_NAME"
 
-echo "==> xcodebuild (sin firma)"
+echo "==> xcodebuild (SwiftUI nativo, sin Capacitor)"
 xcodebuild \
-  -workspace "$WORKSPACE" \
+  -project "$PROJECT" \
   -scheme "$SCHEME" \
   -configuration Release \
   -derivedDataPath "$BUILD_DIR/DerivedData" \
@@ -61,4 +50,3 @@ SIZE=$(du -h "$OUT_DIR/$IPA_NAME" | cut -f1)
 echo ""
 echo "✓ IPA generado: $OUT_DIR/$IPA_NAME ($SIZE)"
 echo "  Descarga: https://tv.vixred.com/ipa/ios"
-echo "  En iPhone: guardar → abrir con eSign → firmar → instalar"
