@@ -27,12 +27,14 @@ jobs:
           chmod +x ios/build-ipa-unsigned.sh
           ios/build-ipa-unsigned.sh
 
-      - name: Verify no hard SwiftUICore dependency
+      - name: Verify iOS 17 compatible (no SwiftUICore)
         run: |
           unzip -q data/ipa/VixTV.ipa -d /tmp/vix-ipa-check
           if strings /tmp/vix-ipa-check/Payload/App.app/App | grep -q 'SwiftUICore.framework/SwiftUICore'; then
-            echo "::warning::Binary still references SwiftUICore path (weak link may be OK on iOS 17)"
+            echo "ERROR: Binary links SwiftUICore (missing on iOS 17) — build must use Xcode 15"
+            exit 1
           fi
+          echo "OK: no SwiftUICore dependency"
           ls -lh data/ipa/VixTV.ipa
 
       - name: Upload IPA artifact
