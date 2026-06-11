@@ -22,7 +22,8 @@ command -v xcodebuild >/dev/null || { echo "Instala Xcode"; exit 1; }
 BUILD_DIR="$IOS_APP/build"
 rm -rf "$BUILD_DIR" Payload "$OUT_DIR/$IPA_NAME"
 
-echo "==> xcodebuild (SwiftUI nativo, sin Capacitor)"
+echo "==> Xcode: $(xcodebuild -version | tr '\n' ' ')"
+echo "==> xcodebuild (SwiftUI nativo, sin Capacitor, iOS 17 SDK)"
 xcodebuild \
   -project "$PROJECT" \
   -scheme "$SCHEME" \

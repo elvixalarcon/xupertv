@@ -1,4 +1,5 @@
 # Compila IPA nativo SwiftUI sin firmar (GitHub Actions macOS).
+# Xcode 15 + iOS 17 SDK: evita enlace a SwiftUICore (solo existe en iOS 18+).
 name: iOS IPA (unsigned)
 
 on:
@@ -11,14 +12,28 @@ on:
 
 jobs:
   build-ipa:
-    runs-on: macos-latest
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
 
+      - name: Select Xcode 15.4 (iOS 17 SDK)
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '15.4'
+
       - name: Build unsigned IPA
         run: |
+          xcodebuild -version
           chmod +x ios/build-ipa-unsigned.sh
           ios/build-ipa-unsigned.sh
+
+      - name: Verify no hard SwiftUICore dependency
+        run: |
+          unzip -q data/ipa/VixTV.ipa -d /tmp/vix-ipa-check
+          if strings /tmp/vix-ipa-check/Payload/App.app/App | grep -q 'SwiftUICore.framework/SwiftUICore'; then
+            echo "::warning::Binary still references SwiftUICore path (weak link may be OK on iOS 17)"
+          fi
+          ls -lh data/ipa/VixTV.ipa
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
