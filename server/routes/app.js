@@ -42,6 +42,7 @@ router.get('/download-links', (req, res) => {
     ipa_available: ipa.available,
     ipa_size: ipa.size || 0,
     ipa_version: ipaInstall.getAppVersion(),
+    ipa_build: ipaInstall.getAppVersionInfo().build || null,
     tv_code: `${base}/tv`,
     download_page: `${base}/descargar`,
     tv_version_name: settings.app_tv_version_name,

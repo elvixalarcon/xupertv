@@ -155,7 +155,7 @@
 <body>
   <div class="wrap">
     <h1>📺 Descargar Vix TV</h1>
-    <p class="lead">Elige tu dispositivo. En Android instalas un APK; en iPhone instalas la app desde Safari (sin App Store).</p>
+    <p class="lead" id="page-lead">Elige tu dispositivo. En Android instalas un APK; en iPhone instalas la app nativa desde Safari (sin App Store).</p>
 
     <div class="tabs" id="tabs">
       <button type="button" class="tab" data-panel="iphone">📱 iPhone / iPad</button>
@@ -164,38 +164,6 @@
     </div>
 
     <section id="iphone" class="panel">
-      <div class="card">
-        <div class="label">iPhone / iPad</div>
-        <span class="badge badge-ios">Instalar desde Safari</span>
-        <p style="margin:12px 0 8px">
-          Apple <strong>no permite</strong> instalar un archivo <code>.ipa</code> tocando un enlace como en Android.
-          La forma oficial sin App Store es añadir Vix TV a la pantalla de inicio (app web).
-        </p>
-        <div class="note note-warn" style="margin-top:12px">
-          Funciona igual que una app: icono en el inicio, pantalla completa y acceso directo a películas, series y directos.
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="label">Enlace corto</div>
-        <a class="url" id="url-ios" href="/d/ios"></a>
-        <div class="actions">
-          <a class="btn" id="open-app-ios" href="/">Abrir Vix TV</a>
-          <button type="button" class="btn btn-secondary hidden" id="btn-installed">✓ Ya instalada</button>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="label">Pasos en iPhone (Safari)</div>
-        <ol>
-          <li>Abre el enlace de arriba en <strong>Safari</strong> (no Chrome).</li>
-          <li>Inicia sesión en Vix TV si hace falta.</li>
-          <li>Toca el botón <strong>Compartir</strong> <span class="share-icon" aria-hidden="true"></span> (abajo en Safari).</li>
-          <li>Elige <strong>Añadir a pantalla de inicio</strong>.</li>
-          <li>Confirma con <strong>Añadir</strong>. Verás el icono <strong>Vix TV</strong> en tu inicio.</li>
-        </ol>
-      </div>
-
       <div class="card" id="card-ipa-native">
         <div class="label">App nativa (IPA)</div>
         <span class="badge badge-ios">Instalar en iPhone</span>
@@ -293,9 +261,6 @@
       document.getElementById('url-tv-short').textContent = (links.tv_code || base + '/tv').replace(base, '') || '/tv';
       document.getElementById('url-mobile').textContent = mobileUrl;
       document.getElementById('url-mobile').href = mobileUrl;
-      document.getElementById('url-ios').textContent = links.ios_short || base + '/d/ios';
-      document.getElementById('url-ios').href = links.ios_install || base + '/descargar#iphone';
-      document.getElementById('open-app-ios').href = base + '/';
       const ipaInstall = links.ipa_install || base + '/ipa/install';
       const ipaShort = links.ipa_install_short || base + '/d/ipa';
       const ipaDirect = links.ipa_direct || base + '/ipa/ios';
@@ -388,6 +353,12 @@
       Object.entries(panels).forEach(([key, el]) => el.classList.toggle('active', key === name));
       tabs.forEach((t) => t.classList.toggle('active', t.dataset.panel === name));
       history.replaceState(null, '', name === 'iphone' ? '#iphone' : `#${name}`);
+      const lead = document.getElementById('page-lead');
+      if (lead) {
+        lead.textContent = name === 'iphone'
+          ? 'Instala la app nativa Vix TV en iPhone o iPad desde Safari (sin App Store).'
+          : 'Elige tu dispositivo. En Android instalas un APK; en iPhone instalas la app nativa desde Safari (sin App Store).';
+      }
     }
 
     tabs.forEach((tab) => {
@@ -401,10 +372,6 @@
       : isIOS ? 'iphone' : 'android-tv';
     showPanel(defaultPanel);
 
-    if (isStandalone) {
-      document.getElementById('btn-installed').classList.remove('hidden');
-      document.getElementById('open-app-ios').textContent = 'Abrir Vix TV instalada';
-    }
   </script>
 </body>
 </html>

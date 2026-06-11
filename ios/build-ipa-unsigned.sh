@@ -49,7 +49,16 @@ cp -R "$APP_PATH" "$STAGE/Payload/"
 (cd "$STAGE" && zip -qr "$OUT_DIR/$IPA_NAME" Payload)
 rm -rf "$STAGE"
 
+VERSION=$(grep -m1 'MARKETING_VERSION = ' "$PROJECT/project.pbxproj" | sed 's/.*= //;s/;//;s/ //g')
+BUILD=$(grep -m1 'CURRENT_PROJECT_VERSION = ' "$PROJECT/project.pbxproj" | sed 's/.*= //;s/;//;s/ //g')
+cat > "$OUT_DIR/versions.json" <<EOF
+{
+  "versionName": "$VERSION",
+  "versionCode": "$BUILD"
+}
+EOF
+
 SIZE=$(du -h "$OUT_DIR/$IPA_NAME" | cut -f1)
 echo ""
-echo "✓ IPA generado: $OUT_DIR/$IPA_NAME ($SIZE)"
+echo "✓ IPA generado: $OUT_DIR/$IPA_NAME ($SIZE) v$VERSION ($BUILD)"
 echo "  Descarga: https://tv.vixred.com/ipa/ios"

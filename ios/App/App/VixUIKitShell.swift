@@ -53,6 +53,8 @@ enum VixLivePlayback {
 // MARK: - Login
 
 final class UIKitLoginViewController: UIViewController {
+    private let scrollView = UIScrollView()
+    private let contentView = UIView()
     private let userField = UITextField()
     private let passField = UITextField()
     private let errorLabel = UILabel()
@@ -63,6 +65,7 @@ final class UIKitLoginViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         navigationController?.setNavigationBarHidden(true, animated: false)
+        view.backgroundColor = .black
         VixConfig.saveServer(VixConfig.defaultServer)
 
         gradientLayer.colors = [
@@ -73,13 +76,20 @@ final class UIKitLoginViewController: UIViewController {
         gradientLayer.locations = [0, 0.45, 1]
         view.layer.insertSublayer(gradientLayer, at: 0)
 
+        scrollView.keyboardDismissMode = .interactive
+        scrollView.alwaysBounceVertical = true
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        contentView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(scrollView)
+        scrollView.addSubview(contentView)
+
         let card = UIView()
         card.backgroundColor = UIColor(white: 1, alpha: 0.06)
         card.layer.cornerRadius = 20
         card.layer.borderWidth = 1
         card.layer.borderColor = UIColor(white: 1, alpha: 0.1).cgColor
         card.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(card)
+        contentView.addSubview(card)
 
         let icon = UIImageView(image: UIImage(systemName: "play.tv.fill"))
         icon.tintColor = VixUITheme.accent
@@ -91,12 +101,14 @@ final class UIKitLoginViewController: UIViewController {
         brand.font = .boldSystemFont(ofSize: 34)
         brand.textColor = .white
         brand.textAlignment = .center
+        brand.translatesAutoresizingMaskIntoConstraints = false
 
         let subtitle = UILabel()
         subtitle.text = "Películas · Series · TV en vivo"
         subtitle.font = .systemFont(ofSize: 15, weight: .medium)
         subtitle.textColor = VixUITheme.muted
         subtitle.textAlignment = .center
+        subtitle.translatesAutoresizingMaskIntoConstraints = false
 
         styleField(userField, placeholder: "Usuario", icon: "person.fill")
         styleField(passField, placeholder: "Contraseña", icon: "lock.fill", secure: true)
@@ -105,42 +117,92 @@ final class UIKitLoginViewController: UIViewController {
         errorLabel.font = .systemFont(ofSize: 13)
         errorLabel.numberOfLines = 0
         errorLabel.textAlignment = .center
+        errorLabel.translatesAutoresizingMaskIntoConstraints = false
 
         loginButton.setTitle("Entrar", for: .normal)
         loginButton.titleLabel?.font = .boldSystemFont(ofSize: 18)
         loginButton.backgroundColor = VixUITheme.accent
         loginButton.setTitleColor(.black, for: .normal)
         loginButton.layer.cornerRadius = 14
+        loginButton.translatesAutoresizingMaskIntoConstraints = false
         loginButton.addTarget(self, action: #selector(doLogin), for: .touchUpInside)
         spinner.color = .black
         spinner.hidesWhenStopped = true
+        spinner.translatesAutoresizingMaskIntoConstraints = false
 
-        let stack = UIStackView(arrangedSubviews: [
-            icon, brand, subtitle, userField, passField, errorLabel, loginButton
-        ])
-        stack.axis = .vertical
-        stack.spacing = 16
-        stack.setCustomSpacing(8, after: brand)
-        stack.setCustomSpacing(28, after: subtitle)
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        card.addSubview(stack)
-        view.addSubview(spinner)
+        card.addSubview(icon)
+        card.addSubview(brand)
+        card.addSubview(subtitle)
+        card.addSubview(userField)
+        card.addSubview(passField)
+        card.addSubview(errorLabel)
+        card.addSubview(loginButton)
+        card.addSubview(spinner)
+
+        let pad: CGFloat = 24
+        let cardMax = card.widthAnchor.constraint(lessThanOrEqualToConstant: 420)
+        let cardWidth = card.widthAnchor.constraint(equalTo: contentView.widthAnchor, constant: -(pad * 2))
+        cardWidth.priority = .defaultHigh
 
         NSLayoutConstraint.activate([
-            card.centerYAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerYAnchor),
-            card.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 28),
-            card.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -28),
-            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 28),
-            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 22),
-            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -22),
-            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -28),
-            icon.heightAnchor.constraint(equalToConstant: 52),
+            scrollView.topAnchor.constraint(equalTo: view.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            contentView.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            contentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            contentView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
+
+            card.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            card.topAnchor.constraint(greaterThanOrEqualTo: contentView.safeAreaLayoutGuide.topAnchor, constant: 24),
+            card.bottomAnchor.constraint(lessThanOrEqualTo: contentView.safeAreaLayoutGuide.bottomAnchor, constant: -24),
+            card.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            card.leadingAnchor.constraint(greaterThanOrEqualTo: contentView.leadingAnchor, constant: pad),
+            card.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -pad),
+            cardWidth,
+            cardMax,
+
+            icon.topAnchor.constraint(equalTo: card.topAnchor, constant: 28),
+            icon.centerXAnchor.constraint(equalTo: card.centerXAnchor),
+            icon.widthAnchor.constraint(equalToConstant: 56),
+            icon.heightAnchor.constraint(equalToConstant: 56),
+
+            brand.topAnchor.constraint(equalTo: icon.bottomAnchor, constant: 12),
+            brand.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 22),
+            brand.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -22),
+
+            subtitle.topAnchor.constraint(equalTo: brand.bottomAnchor, constant: 8),
+            subtitle.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 22),
+            subtitle.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -22),
+
+            userField.topAnchor.constraint(equalTo: subtitle.bottomAnchor, constant: 28),
+            userField.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 22),
+            userField.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -22),
             userField.heightAnchor.constraint(equalToConstant: 50),
+
+            passField.topAnchor.constraint(equalTo: userField.bottomAnchor, constant: 14),
+            passField.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 22),
+            passField.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -22),
             passField.heightAnchor.constraint(equalToConstant: 50),
+
+            errorLabel.topAnchor.constraint(equalTo: passField.bottomAnchor, constant: 10),
+            errorLabel.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 22),
+            errorLabel.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -22),
+
+            loginButton.topAnchor.constraint(equalTo: errorLabel.bottomAnchor, constant: 16),
+            loginButton.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 22),
+            loginButton.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -22),
             loginButton.heightAnchor.constraint(equalToConstant: 52),
+            loginButton.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -28),
+
             spinner.centerXAnchor.constraint(equalTo: loginButton.centerXAnchor),
             spinner.centerYAnchor.constraint(equalTo: loginButton.centerYAnchor)
         ])
+
+        contentView.heightAnchor.constraint(greaterThanOrEqualTo: scrollView.frameLayoutGuide.heightAnchor).isActive = true
 
         userField.delegate = self
         passField.delegate = self
@@ -152,6 +214,7 @@ final class UIKitLoginViewController: UIViewController {
     }
 
     private func styleField(_ field: UITextField, placeholder: String, icon: String, secure: Bool = false) {
+        field.translatesAutoresizingMaskIntoConstraints = false
         field.placeholder = placeholder
         field.textColor = .white
         field.backgroundColor = UIColor(white: 0, alpha: 0.35)
@@ -381,16 +444,17 @@ final class UIKitProfileViewController: UIViewController {
         spinner.color = VixUITheme.accent
         spinner.translatesAutoresizingMaskIntoConstraints = false
 
-        view.addSubview(title)
+        view.addSubview(headerStack)
         view.addSubview(segmented)
         view.addSubview(table)
         view.addSubview(logout)
         view.addSubview(spinner)
 
         NSLayoutConstraint.activate([
-            title.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
-            title.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            segmented.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 28),
+            headerStack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
+            headerStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            headerStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            segmented.topAnchor.constraint(equalTo: headerStack.bottomAnchor, constant: 20),
             segmented.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             segmented.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
             table.topAnchor.constraint(equalTo: segmented.bottomAnchor, constant: 12),
