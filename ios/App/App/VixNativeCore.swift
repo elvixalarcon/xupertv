@@ -624,23 +624,41 @@ final class VixPlayerController: ObservableObject {
     @Published var player: AVPlayer?
     private var observer: NSObjectProtocol?
     private var timeObserver: Any?
+    private var readyObserver: NSKeyValueObservation?
     var onProgress: ((Double, Double) -> Void)?
 
     func play(url: URL, startAt: Double = 0) {
         stop()
         let item = AVPlayerItem(url: url)
         item.preferredPeakBitRate = 0
-        let p = AVPlayer(playerItem: item)
-        p.automaticallyWaitsToMinimizeStalling = true
         if #available(iOS 10.0, *) {
             item.preferredForwardBufferDuration = 30
         }
+        let p = AVPlayer(playerItem: item)
+        p.automaticallyWaitsToMinimizeStalling = true
         player = p
-        if startAt > 0 {
-            let t = CMTime(seconds: startAt, preferredTimescale: 600)
-            p.seek(to: t)
+
+        func startPlayback() {
+            if startAt > 0 {
+                p.seek(to: CMTime(seconds: startAt, preferredTimescale: 600)) { finished in
+                    if finished { p.play() }
+                }
+            } else {
+                p.play()
+            }
         }
-        p.play()
+
+        if item.status == .readyToPlay {
+            startPlayback()
+        } else {
+            readyObserver = item.observe(\.status, options: [.new]) { observed, _ in
+                guard observed.status == .readyToPlay else { return }
+                self.readyObserver?.invalidate()
+                self.readyObserver = nil
+                startPlayback()
+            }
+        }
+
         observer = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemFailedToPlayToEndTime,
             object: item,
@@ -658,6 +676,8 @@ final class VixPlayerController: ObservableObject {
     func stop() {
         if let o = observer { NotificationCenter.default.removeObserver(o) }
         observer = nil
+        readyObserver?.invalidate()
+        readyObserver = nil
         if let p = player, let to = timeObserver { p.removeTimeObserver(to) }
         timeObserver = nil
         onProgress = nil

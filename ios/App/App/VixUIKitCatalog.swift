@@ -35,6 +35,7 @@ enum VixUIKitPlayer {
     private static var progressObserver: Any?
     private static var progressHandler: ((Double, Double) -> Void)?
     private static var statusObserver: NSKeyValueObservation?
+    private static var readyObserver: NSKeyValueObservation?
 
     static func activateAudioSession() {
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
@@ -76,7 +77,7 @@ enum VixUIKitPlayer {
         onProgress: ((Double, Double) -> Void)?
     ) {
         activateAudioSession()
-        clearProgressObserver()
+        clearObservers()
         progressHandler = onProgress
         let token = AuthSession.shared.api.token
         let item = playerItem(for: url, token: token)
@@ -85,46 +86,90 @@ enum VixUIKitPlayer {
             item.preferredPeakBitRate = 0
             item.preferredForwardBufferDuration = 30
         }
-        let player = AVPlayer(playerItem: item)
-        player.automaticallyWaitsToMinimizeStalling = !isStream
-        if let onProgress {
-            progressObserver = player.addPeriodicTimeObserver(
-                forInterval: CMTime(seconds: 15, preferredTimescale: 1),
-                queue: .main
-            ) { t in
-                let dur = player.currentItem?.duration.seconds ?? 0
-                if dur.isFinite && dur > 0 { onProgress(t.seconds, dur) }
+
+        func openPlayer() {
+            let player = AVPlayer(playerItem: item)
+            player.automaticallyWaitsToMinimizeStalling = true
+            if let onProgress {
+                progressObserver = player.addPeriodicTimeObserver(
+                    forInterval: CMTime(seconds: 15, preferredTimescale: 1),
+                    queue: .main
+                ) { t in
+                    let dur = player.currentItem?.duration.seconds ?? 0
+                    if dur.isFinite && dur > 0 { onProgress(t.seconds, dur) }
+                }
+            }
+            statusObserver = item.observe(\.status, options: [.new]) { [weak vc] observed, _ in
+                guard observed.status == .failed, allowTranscodeFallback, isStream, let vc else { return }
+                guard var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
+                var query = parts.queryItems ?? []
+                if query.contains(where: { $0.name == "transcode" }) { return }
+                query.append(URLQueryItem(name: "transcode", value: "1"))
+                parts.queryItems = query
+                guard let retry = parts.url else { return }
+                DispatchQueue.main.async {
+                    vc.presentedViewController?.dismiss(animated: false)
+                    playFullscreen(from: vc, url: retry, startAt: startAt, allowTranscodeFallback: false, onProgress: onProgress)
+                }
+            }
+            let pvc = AVPlayerViewController()
+            pvc.player = player
+            pvc.modalPresentationStyle = .fullScreen
+            topPresenter(from: vc).present(pvc, animated: true) {
+                beginPlayback(player: player, item: item, startAt: startAt)
             }
         }
-        statusObserver = item.observe(\.status, options: [.new]) { [weak vc] observed, _ in
-            guard observed.status == .failed, allowTranscodeFallback, isStream, let vc else { return }
-            guard var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
-            var query = parts.queryItems ?? []
-            if query.contains(where: { $0.name == "transcode" }) { return }
-            query.append(URLQueryItem(name: "transcode", value: "1"))
-            parts.queryItems = query
-            guard let retry = parts.url else { return }
-            DispatchQueue.main.async {
-                vc.presentedViewController?.dismiss(animated: false)
-                playFullscreen(from: vc, url: retry, startAt: startAt, allowTranscodeFallback: false, onProgress: onProgress)
+
+        if isStream, let asset = item.asset as? AVURLAsset {
+            asset.loadValuesAsynchronously(forKeys: ["playable"]) {
+                DispatchQueue.main.async { openPlayer() }
             }
+        } else {
+            openPlayer()
         }
-        let pvc = AVPlayerViewController()
-        pvc.player = player
-        pvc.modalPresentationStyle = .fullScreen
-        topPresenter(from: vc).present(pvc, animated: true) {
+    }
+
+    private static func beginPlayback(player: AVPlayer, item: AVPlayerItem, startAt: Double) {
+        readyObserver?.invalidate()
+        readyObserver = nil
+
+        func start() {
             if startAt > 5 {
-                player.seek(to: CMTime(seconds: startAt, preferredTimescale: 600)) { _ in player.play() }
+                player.seek(to: CMTime(seconds: startAt, preferredTimescale: 600)) { finished in
+                    if finished { player.play() }
+                }
             } else {
                 player.play()
             }
         }
+
+        if item.status == .readyToPlay {
+            start()
+            return
+        }
+
+        readyObserver = item.observe(\.status, options: [.new]) { observed, _ in
+            switch observed.status {
+            case .readyToPlay:
+                readyObserver?.invalidate()
+                readyObserver = nil
+                start()
+            case .failed:
+                readyObserver?.invalidate()
+                readyObserver = nil
+            default:
+                break
+            }
+        }
     }
 
-    private static func clearProgressObserver() {
+    private static func clearObservers() {
         progressHandler = nil
         progressObserver = nil
+        statusObserver?.invalidate()
         statusObserver = nil
+        readyObserver?.invalidate()
+        readyObserver = nil
     }
 
     static func attachLive(player: inout AVPlayer?, playerVC: AVPlayerViewController, url: URL) {
