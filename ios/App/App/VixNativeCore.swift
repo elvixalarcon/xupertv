@@ -562,6 +562,15 @@ final class VixAPI {
         _ = try await request(path: "/api/profiles/\(id)", method: "DELETE")
     }
 
+    func changePassword(current: String, new: String) async throws {
+        let payload: [String: String] = [
+            "current_password": current,
+            "new_password": new
+        ]
+        let body = try JSONSerialization.data(withJSONObject: payload)
+        _ = try await request(path: "/api/auth/change-password", method: "POST", body: body)
+    }
+
     private func decodeProfiles(_ raw: Any?) -> [UserProfile] {
         guard let arr = raw as? [[String: Any]] else { return [] }
         return arr.compactMap { decodeProfile($0) }

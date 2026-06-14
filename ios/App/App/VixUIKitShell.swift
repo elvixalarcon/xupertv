@@ -586,6 +586,125 @@ final class UIKitMainTabController: UITabBarController, UITabBarControllerDelega
     }
 }
 
+// MARK: - Cambiar contraseña
+
+final class UIKitChangePasswordViewController: UIViewController {
+    private let currentField = UITextField()
+    private let newField = UITextField()
+    private let confirmField = UITextField()
+    private let errorLabel = UILabel()
+    private let saveButton = UIButton(type: .system)
+    private let spinner = UIActivityIndicatorView(style: .medium)
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = VixUITheme.bg
+        title = "Cambiar contraseña"
+        navigationItem.leftBarButtonItem = UIBarButtonItem(
+            title: "Cancelar",
+            style: .plain,
+            target: self,
+            action: #selector(cancelTapped)
+        )
+        navigationController?.navigationBar.barStyle = .black
+        navigationController?.navigationBar.titleTextAttributes = [.foregroundColor: UIColor.white]
+        navigationController?.navigationBar.tintColor = VixUITheme.accent
+
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.spacing = 14
+        stack.translatesAutoresizingMaskIntoConstraints = false
+
+        func styleField(_ field: UITextField, placeholder: String) {
+            field.placeholder = placeholder
+            field.isSecureTextEntry = true
+            field.borderStyle = .roundedRect
+            field.backgroundColor = VixUITheme.card
+            field.textColor = .white
+            field.autocapitalizationType = .none
+            field.autocorrectionType = .no
+        }
+        styleField(currentField, placeholder: "Contraseña actual")
+        styleField(newField, placeholder: "Nueva contraseña")
+        styleField(confirmField, placeholder: "Confirmar nueva contraseña")
+
+        errorLabel.textColor = .systemRed
+        errorLabel.font = .systemFont(ofSize: 14)
+        errorLabel.numberOfLines = 0
+        errorLabel.textAlignment = .center
+
+        saveButton.setTitle("Guardar", for: .normal)
+        saveButton.setTitleColor(.black, for: .normal)
+        saveButton.backgroundColor = VixUITheme.accent
+        saveButton.layer.cornerRadius = 10
+        saveButton.titleLabel?.font = .boldSystemFont(ofSize: 17)
+        saveButton.contentEdgeInsets = UIEdgeInsets(top: 12, left: 20, bottom: 12, right: 20)
+        saveButton.addTarget(self, action: #selector(saveTapped), for: .touchUpInside)
+
+        spinner.color = VixUITheme.accent
+        spinner.hidesWhenStopped = true
+
+        stack.addArrangedSubview(currentField)
+        stack.addArrangedSubview(newField)
+        stack.addArrangedSubview(confirmField)
+        stack.addArrangedSubview(errorLabel)
+        stack.addArrangedSubview(saveButton)
+        stack.addArrangedSubview(spinner)
+
+        view.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+            stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            stack.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+        ])
+        currentField.becomeFirstResponder()
+    }
+
+    @objc private func cancelTapped() {
+        dismiss(animated: true)
+    }
+
+    @objc private func saveTapped() {
+        errorLabel.text = ""
+        let current = currentField.text ?? ""
+        let next = newField.text ?? ""
+        let confirm = confirmField.text ?? ""
+        guard !current.isEmpty, !next.isEmpty, !confirm.isEmpty else {
+            errorLabel.text = "Completa todos los campos"
+            return
+        }
+        guard next == confirm else {
+            errorLabel.text = "Las contraseñas nuevas no coinciden"
+            return
+        }
+        guard next.count >= 4 else {
+            errorLabel.text = "Mínimo 4 caracteres"
+            return
+        }
+        saveButton.isEnabled = false
+        spinner.startAnimating()
+        Task {
+            do {
+                try await AuthSession.shared.api.changePassword(current: current, new: next)
+                await MainActor.run {
+                    spinner.stopAnimating()
+                    let alert = UIAlertController(title: "Listo", message: "Contraseña actualizada", preferredStyle: .alert)
+                    alert.addAction(UIAlertAction(title: "OK", style: .default) { [weak self] _ in
+                        self?.dismiss(animated: true)
+                    })
+                    self.present(alert, animated: true)
+                }
+            } catch {
+                await MainActor.run {
+                    spinner.stopAnimating()
+                    saveButton.isEnabled = true
+                    errorLabel.text = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                }
+            }
+        }
+    }
+}
+
 // MARK: - Perfil (favoritos + historial)
 
 final class UIKitProfileViewController: UIViewController {
@@ -622,6 +741,11 @@ final class UIKitProfileViewController: UIViewController {
         switchProfile.setTitleColor(VixUITheme.accent, for: .normal)
         switchProfile.addTarget(self, action: #selector(switchProfileTapped), for: .touchUpInside)
         headerStack.addArrangedSubview(switchProfile)
+        let changePassword = UIButton(type: .system)
+        changePassword.setTitle("Cambiar contraseña", for: .normal)
+        changePassword.setTitleColor(VixUITheme.accent, for: .normal)
+        changePassword.addTarget(self, action: #selector(changePasswordTapped), for: .touchUpInside)
+        headerStack.addArrangedSubview(changePassword)
         headerStack.translatesAutoresizingMaskIntoConstraints = false
 
         segmented.selectedSegmentIndex = 0
@@ -680,6 +804,13 @@ final class UIKitProfileViewController: UIViewController {
         let picker = UIKitProfilePickerViewController()
         picker.modalPresentationStyle = .fullScreen
         present(UINavigationController(rootViewController: picker), animated: true)
+    }
+
+    @objc private func changePasswordTapped() {
+        let vc = UIKitChangePasswordViewController()
+        let nav = UINavigationController(rootViewController: vc)
+        nav.modalPresentationStyle = .fullScreen
+        present(nav, animated: true)
     }
 
     private func load() {

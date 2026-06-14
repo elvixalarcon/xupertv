@@ -478,6 +478,7 @@ struct SettingsNativeView: View {
     @ObservedObject private var session = AuthSession.shared
     @State private var server = VixConfig.serverURL
     @State private var showProfilePicker = false
+    @State private var showChangePassword = false
 
     var body: some View {
         NavigationView {
@@ -500,6 +501,10 @@ struct SettingsNativeView: View {
                         }
                         Button("Cambiar perfil") { showProfilePicker = true }
                     }
+                }
+
+                Section(header: Text("Cuenta")) {
+                    Button("Cambiar contraseña") { showChangePassword = true }
                 }
 
                 Section(header: Text("Servidor")) {
@@ -531,7 +536,73 @@ struct SettingsNativeView: View {
             .sheet(isPresented: $showProfilePicker) {
                 ProfilePickerView(session: session, switching: true)
             }
+            .sheet(isPresented: $showChangePassword) {
+                ChangePasswordView()
+            }
         }
         .navigationViewStyle(StackNavigationViewStyle())
+    }
+}
+
+struct ChangePasswordView: View {
+    @Environment(\.presentationMode) private var presentationMode
+    @State private var current = ""
+    @State private var newPassword = ""
+    @State private var confirm = ""
+    @State private var error = ""
+    @State private var saving = false
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section(header: Text("Contraseña actual")) {
+                    SecureField("Actual", text: $current)
+                }
+                Section(header: Text("Nueva contraseña")) {
+                    SecureField("Nueva", text: $newPassword)
+                    SecureField("Confirmar", text: $confirm)
+                }
+                if !error.isEmpty {
+                    Section {
+                        Text(error).foregroundColor(.red)
+                    }
+                }
+                Section {
+                    Button(saving ? "Guardando…" : "Guardar") {
+                        Task { await save() }
+                    }
+                    .disabled(saving)
+                }
+            }
+            .navigationBarTitle("Cambiar contraseña", displayMode: .inline)
+            .navigationBarItems(leading: Button("Cancelar") {
+                presentationMode.wrappedValue.dismiss()
+            })
+        }
+        .navigationViewStyle(StackNavigationViewStyle())
+    }
+
+    private func save() async {
+        error = ""
+        guard !current.isEmpty, !newPassword.isEmpty, !confirm.isEmpty else {
+            error = "Completa todos los campos"
+            return
+        }
+        guard newPassword == confirm else {
+            error = "Las contraseñas nuevas no coinciden"
+            return
+        }
+        guard newPassword.count >= 4 else {
+            error = "Mínimo 4 caracteres"
+            return
+        }
+        saving = true
+        defer { saving = false }
+        do {
+            try await AuthSession.shared.api.changePassword(current: current, new: newPassword)
+            presentationMode.wrappedValue.dismiss()
+        } catch let err {
+            error = err.localizedDescription
+        }
     }
 }

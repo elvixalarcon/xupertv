@@ -28,7 +28,7 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-.screen { display: none; min-height: 100vh; }
+.screen { display: none; min-height: 100vh; min-height: 100dvh; }
 .screen.active { display: block; }
 
 /* LOGIN */
@@ -2697,6 +2697,25 @@ html.vix-mobile.vix-native .hero-slide.active.has-trailer-audio .hero-overlay {
 
 #series-detail-content { padding: 0 24px 40px; }
 
+.series-season-block {
+  margin: 28px 0 32px;
+}
+.series-season-block .series-episodes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+  max-width: 560px;
+}
+.series-season-block .episode-item {
+  width: 100%;
+  max-width: 560px;
+}
+#series-detail-content.movie-detail-shell .movie-similar-section {
+  margin-top: 8px;
+  opacity: 1;
+}
+
 .series-header {
   display: flex; gap: 24px; margin-bottom: 32px; flex-wrap: wrap;
 }
@@ -2936,6 +2955,14 @@ html.vix-mobile.vix-native .hero-slide.active.has-trailer-audio .hero-overlay {
 
 .mob-nav-btn.active { color: var(--gold); }
 .mob-nav-btn.mob-live.active { color: var(--red); }
+.mob-nav-account {
+  display: none;
+}
+
+html.vix-mobile.vix-native .mob-nav-account {
+  display: flex !important;
+}
+
 .mob-nav-btn.mob-live.active .live-dot {
   background: #f87171;
 }
@@ -3348,10 +3375,126 @@ html.vix-mobile.vix-native .hero-slide.active.has-trailer-audio .hero-overlay {
 }
 
 .player-time {
-  margin-left: auto;
   font-size: .82rem;
   color: rgba(255,255,255,.85);
   font-variant-numeric: tabular-nums;
+}
+
+.player-settings-wrap {
+  position: relative;
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+
+.player-settings-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: auto;
+  padding: 7px 10px;
+}
+
+.player-settings-icon {
+  width: 18px;
+  height: 18px;
+  opacity: .92;
+}
+
+.player-settings-label {
+  font-size: .72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  opacity: .9;
+}
+
+.player-subtitle-btn {
+  min-width: 40px;
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  opacity: .75;
+  transition: opacity .15s, background .15s;
+}
+
+.player-subtitle-btn.active {
+  opacity: 1;
+  background: rgba(255, 255, 255, .18);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .25);
+}
+
+.player-settings-popup {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  min-width: 200px;
+  background: rgba(28, 28, 28, 0.97);
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 32px rgba(0, 0, 0, .55);
+  z-index: 14;
+  backdrop-filter: blur(12px);
+}
+
+.player-settings-popup.hidden { display: none; }
+
+.player-settings-popup-head {
+  padding: 12px 16px 8px;
+  font-size: .78rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, .55);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.player-settings-popup-body {
+  padding: 4px 0 8px;
+}
+
+.player-quality-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, .92);
+  padding: 10px 16px;
+  font-size: .9rem;
+  cursor: pointer;
+  transition: background .12s;
+}
+
+.player-quality-option:hover,
+.player-quality-option:focus-visible {
+  background: rgba(255, 255, 255, .08);
+  outline: none;
+}
+
+.player-quality-option.active {
+  color: #fff;
+  font-weight: 600;
+}
+
+.player-quality-option .pq-check {
+  width: 18px;
+  color: var(--gold, #f5c518);
+  font-size: 1rem;
+  opacity: 0;
+}
+
+.player-quality-option.active .pq-check {
+  opacity: 1;
+}
+
+/* legacy aliases */
+.player-quality-wrap { position: relative; margin-left: auto; flex-shrink: 0; }
+.player-quality-btn { min-width: 52px; padding: 8px 10px; font-size: .78rem; }
+.player-quality-menu { display: none; }
+
+.player-video-wrap.player-loading-external::after {
+  content: 'Obteniendo enlace…';
 }
 
 .modal.player-fullscreen-mode .player-controls {
@@ -4401,4 +4544,365 @@ html.vix-ios .search-overlay {
 
 html.vix-ios .mobile-bottom-nav {
   padding-bottom: calc(8px + env(safe-area-inset-bottom));
+}
+
+/* Android móvil nativo — misma UX que iPhone + estilo Netflix */
+html.vix-mobile.vix-native .ios-menu-bar {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 0 12px 10px;
+  margin: 0;
+  flex: 1 1 100%;
+  width: 100%;
+  order: 10;
+  touch-action: pan-x;
+}
+
+html.vix-mobile.vix-native .ios-menu-bar::-webkit-scrollbar {
+  display: none;
+}
+
+html.vix-mobile.vix-native .ios-nav-btn {
+  flex: 0 0 auto;
+  border: 1px solid #2a2a40;
+  background: rgba(255,255,255,.04);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 6px 11px;
+  min-height: 34px;
+  font-size: .72rem;
+  font-weight: 700;
+  white-space: nowrap;
+  touch-action: manipulation;
+  transition: background .2s, color .2s, transform .15s;
+}
+
+html.vix-mobile.vix-native .ios-nav-btn:active {
+  transform: scale(0.96);
+}
+
+html.vix-mobile.vix-native .ios-nav-btn.active {
+  color: #111;
+  background: var(--gold);
+  border-color: var(--gold);
+  box-shadow: 0 4px 18px rgba(245, 197, 24, .28);
+}
+
+html.vix-mobile.vix-native .ios-nav-btn.ios-nav-live.active {
+  color: #fff;
+  background: var(--red);
+  border-color: var(--red);
+  box-shadow: 0 4px 18px rgba(239, 68, 68, .35);
+}
+
+html.vix-mobile.vix-native .topnav {
+  display: none !important;
+}
+
+html.vix-mobile.vix-native .mob-nav-extra {
+  display: none !important;
+}
+
+html.vix-mobile.vix-native .mobile-bottom-nav {
+  display: flex !important;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  justify-content: space-around;
+  background: rgba(7, 7, 13, 0.98);
+  border-top: 1px solid #1a1a2e;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.35);
+}
+
+html.vix-mobile.vix-native .mob-nav-core {
+  flex: 1;
+  max-width: 120px;
+}
+
+html.vix-mobile.vix-native .mob-nav-core .mob-icon {
+  font-size: 1.2rem;
+}
+
+html.vix-mobile.vix-native .mob-nav-core span:last-child {
+  font-size: .68rem;
+  letter-spacing: 0.01em;
+}
+
+html.vix-mobile.vix-native #app .page,
+html.vix-mobile.vix-native #main-content {
+  padding-bottom: calc(72px + env(safe-area-inset-bottom));
+}
+
+html.vix-mobile.vix-native .topbar {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 16px;
+  padding-top: calc(10px + env(safe-area-inset-top));
+  background: linear-gradient(180deg, rgba(7,7,13,.98) 0%, rgba(7,7,13,.92) 70%, transparent 100%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+html.vix-mobile.vix-native .topbar .logo-sm {
+  grid-column: 1;
+  grid-row: 1;
+  margin: 0;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+html.vix-mobile.vix-native .topbar .search-trigger-btn {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: start;
+}
+
+html.vix-mobile.vix-native .topbar-right {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+html.vix-mobile.vix-native .ios-menu-bar {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  order: unset;
+  flex: unset;
+  width: 100%;
+  margin: 0;
+  padding: 6px 0 2px;
+  border-top: 1px solid #1a1a2e;
+  gap: 6px;
+}
+
+html.vix-mobile.vix-native body {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+html.vix-mobile.vix-native #app.screen.active {
+  min-height: 100dvh;
+  overflow: visible;
+}
+
+html.vix-mobile.vix-native .hero {
+  height: min(58vh, 420px);
+  margin-bottom: 4px;
+}
+
+html.vix-mobile.vix-native .hero-slide {
+  transition: opacity 0.5s ease-in-out !important;
+}
+
+html.vix-mobile.vix-native .hero-slide-bg {
+  transform: scale(1) !important;
+  transition: opacity 0.5s ease-in-out !important;
+}
+
+html.vix-mobile.vix-native.vix-booting .page.page-enter,
+html.vix-mobile.vix-native.vix-booting .hero-content.hero-fade,
+html.vix-mobile.vix-native .page.active.page-enter,
+html.vix-mobile.vix-native .hero-content.hero-fade {
+  animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+html.vix-mobile.vix-native .catalog-row .card {
+  transition: transform .22s cubic-bezier(.2,.8,.2,1), box-shadow .22s ease;
+}
+
+html.vix-mobile.vix-native .catalog-row .card:active {
+  transform: scale(0.94);
+}
+
+html.vix-mobile.vix-native .catalog-row .card,
+html.vix-mobile.vix-native.vix-app-ready .catalog-row .card {
+  animation: none !important;
+}
+
+html.vix-mobile.vix-native .hero-content {
+  animation: none !important;
+}
+
+html.vix-mobile.vix-native .carousel,
+html.vix-mobile.vix-native .catalog-row__track {
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+  scroll-snap-type: x proximity;
+}
+
+html.vix-mobile.vix-native .btn-primary {
+  border-radius: 14px;
+  font-weight: 700;
+  box-shadow: 0 6px 20px rgba(245, 197, 24, .25);
+}
+
+html.vix-mobile.vix-native .login-box {
+  animation: mobile-hero-in .45s ease-out both;
+}
+
+html.vix-mobile.vix-native .profile-card {
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+
+html.vix-mobile.vix-native .profile-card:active {
+  transform: scale(0.96);
+}
+
+/* Cuenta móvil nativa — como iPhone */
+.account-mobile-head,
+.account-logout-btn,
+.mylist-tab-account,
+.account-web-actions {
+  display: none;
+}
+
+.account-change-password-btn {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px 16px;
+  border: 1px solid rgba(255, 193, 7, 0.35);
+  border-radius: 12px;
+  background: rgba(255, 193, 7, 0.08);
+  color: var(--gold, #ffc107);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.account-change-password-btn:active {
+  transform: scale(0.98);
+  background: rgba(255, 193, 7, 0.14);
+}
+
+html.vix-account-mobile .account-change-password-btn {
+  width: calc(100% - 32px);
+  margin: 12px 16px 0;
+}
+
+.account-web-actions.is-visible {
+  display: flex;
+  gap: 12px;
+  padding: 0 0 12px;
+}
+
+.account-web-actions.is-visible .account-change-password-btn {
+  width: auto;
+  margin-top: 0;
+}
+
+html.vix-account-mobile .account-mobile-head.is-visible {
+  display: block;
+  padding: 16px 16px 8px;
+}
+
+html.vix-account-mobile .account-logout-btn.is-visible {
+  display: block;
+  width: calc(100% - 32px);
+  margin: 24px 16px calc(16px + env(safe-area-inset-bottom));
+  padding: 14px 20px;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 14px;
+  background: rgba(239, 68, 68, 0.08);
+  color: #f87171;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+html.vix-account-mobile .account-logout-btn.is-visible:active {
+  transform: scale(0.98);
+  background: rgba(239, 68, 68, 0.14);
+}
+
+html.vix-account-mobile .account-profile-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+html.vix-account-mobile .account-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #1a1a2e, #2a2040);
+  border: 1px solid #2a2a40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  flex-shrink: 0;
+}
+
+html.vix-account-mobile .account-profile-name {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+html.vix-account-mobile .account-profile-user {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: .85rem;
+}
+
+html.vix-account-mobile .account-switch-btn {
+  margin-top: 14px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--gold);
+  font-size: .92rem;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+html.vix-account-mobile .mylist-tab-account {
+  display: inline-flex;
+}
+
+html.vix-account-mobile .mylist-tab-default {
+  display: none !important;
+}
+
+html.vix-account-mobile #page-mylist .page-title.hidden {
+  display: none;
+}
+
+html.vix-account-mobile #page-mylist .mylist-tabs {
+  padding: 0 16px 14px;
+  gap: 6px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+html.vix-account-mobile #page-mylist .mylist-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+html.vix-account-mobile #page-mylist .mylist-tab {
+  flex: 0 0 auto;
+  padding: 8px 14px;
+  font-size: .78rem;
+  min-height: 36px;
+}
+
+html.vix-account-mobile #page-mylist .mylist-panel {
+  padding: 0 16px;
 }
