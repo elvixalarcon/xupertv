@@ -41,25 +41,36 @@ struct CatalogPoster: Identifiable, Decodable, Hashable {
     let poster: String?
     let content_type: String?
     let rating: Double?
+    let external: Bool
+    let source: String?
+    let slug: String?
+    let year: Int?
 
     var mediaType: String { content_type ?? "movie" }
     var isSeries: Bool { mediaType == "series" }
-
-    enum CodingKeys: String, CodingKey {
-        case id, title, poster, content_type, type, rating
+    var isExternal: Bool {
+        external || (source != nil && slug != nil && !(source ?? "").isEmpty && !(slug ?? "").isEmpty)
     }
 
-    init(id: Int, title: String, poster: String?, content_type: String?, rating: Double? = nil) {
+    enum CodingKeys: String, CodingKey {
+        case id, title, poster, content_type, type, rating, external, source, slug, year
+    }
+
+    init(id: Int, title: String, poster: String?, content_type: String?, rating: Double? = nil,
+         external: Bool = false, source: String? = nil, slug: String? = nil, year: Int? = nil) {
         self.id = id
         self.title = title
         self.poster = poster
         self.content_type = content_type
         self.rating = rating
+        self.external = external
+        self.source = source
+        self.slug = slug
+        self.year = year
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = try c.decode(Int.self, forKey: .id)
         title = try c.decode(String.self, forKey: .title)
         poster = try? c.decode(String.self, forKey: .poster)
         content_type = (try? c.decode(String.self, forKey: .content_type))
@@ -71,6 +82,26 @@ struct CatalogPoster: Identifiable, Decodable, Hashable {
         } else {
             rating = nil
         }
+        external = (try? c.decode(Bool.self, forKey: .external)) ?? false
+        source = try? c.decode(String.self, forKey: .source)
+        slug = try? c.decode(String.self, forKey: .slug)
+        year = try? c.decode(Int.self, forKey: .year)
+        if let decodedId = try? c.decode(Int.self, forKey: .id), decodedId > 0 {
+            id = decodedId
+        } else if let src = source, let sl = slug, !src.isEmpty, !sl.isEmpty {
+            id = Self.externalId(source: src, slug: sl)
+        } else {
+            id = 0
+        }
+    }
+
+    static func externalId(source: String, slug: String) -> Int {
+        let key = "\(source):\(slug)"
+        var hash = 0
+        for scalar in key.unicodeScalars {
+            hash = ((hash << 5) &- hash) &+ Int(scalar.value)
+        }
+        return abs(hash % 900_000_000) + 1
     }
 }
 
@@ -269,6 +300,75 @@ struct WatchItem: Identifiable, Decodable, Hashable {
 struct LibraryStatus: Decodable {
     let in_watchlist: Bool
     let liked: Bool
+}
+
+struct ExternalPlayInfo: Decodable {
+    let url: String
+    let proxied: String?
+}
+
+struct ExternalMovieDetail: Decodable {
+    let source: String?
+    let slug: String?
+    let title: String
+    let poster: String?
+    let backdrop: String?
+    let year: Int?
+    let rating: Double?
+    let synopsis: String?
+    let overview: String?
+    let genre: String?
+    let genres: [String]?
+    let similar: [CatalogPoster]?
+}
+
+struct ExternalSeriesEpisode: Decodable, Hashable {
+    let season: Int
+    let episode: Int
+    let title: String?
+    let overview: String?
+    let poster: String?
+}
+
+struct ExternalSeasonBlock: Decodable {
+    let season: Int?
+    let episodes: [ExternalSeriesEpisode]?
+}
+
+struct ExternalSeriesDetail: Decodable {
+    let source: String?
+    let slug: String?
+    let title: String
+    let poster: String?
+    let backdrop: String?
+    let year: Int?
+    let rating: Double?
+    let synopsis: String?
+    let overview: String?
+    let genre: String?
+    let seasons: [ExternalSeasonBlock]?
+    let episodes: [ExternalSeriesEpisode]?
+    let similar: [CatalogPoster]?
+
+    var flatEpisodes: [ExternalSeriesEpisode] {
+        if let seasons {
+            var out: [ExternalSeriesEpisode] = []
+            for block in seasons {
+                let defaultSeason = block.season ?? 1
+                for ep in block.episodes ?? [] {
+                    out.append(ExternalSeriesEpisode(
+                        season: ep.season > 0 ? ep.season : defaultSeason,
+                        episode: ep.episode,
+                        title: ep.title,
+                        overview: ep.overview,
+                        poster: ep.poster
+                    ))
+                }
+            }
+            if !out.isEmpty { return out.sorted { $0.season == $1.season ? $0.episode < $1.episode : $0.season < $1.season } }
+        }
+        return (episodes ?? []).sorted { $0.season == $1.season ? $0.episode < $1.episode : $0.season < $1.season }
+    }
 }
 
 // MARK: - Play URLs
@@ -598,6 +698,54 @@ final class VixAPI {
     func movieDetail(id: Int) async throws -> MovieDetail {
         let data = try await request(path: "/api/movies/\(id)/detail")
         return try JSONDecoder().decode(MovieDetail.self, from: data)
+    }
+
+    func externalMovieMeta(source: String, slug: String, year: Int? = nil) async throws -> ExternalMovieDetail {
+        let encSource = source.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? source
+        let encSlug = slug.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? slug
+        var path = "/api/catalog/external/\(encSource)/\(encSlug)"
+        if let year, year > 0 { path += "?year=\(year)" }
+        let data = try await request(path: path)
+        return try JSONDecoder().decode(ExternalMovieDetail.self, from: data)
+    }
+
+    func externalMoviePlay(source: String, slug: String, year: Int? = nil, quality: String = "1080") async throws -> ExternalPlayInfo {
+        let encSource = source.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? source
+        let encSlug = slug.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? slug
+        var path = "/api/catalog/external/\(encSource)/\(encSlug)/play?quality=\(quality)"
+        if let year, year > 0 { path += "&year=\(year)" }
+        let data = try await request(path: path)
+        return try JSONDecoder().decode(ExternalPlayInfo.self, from: data)
+    }
+
+    func externalSeriesMeta(source: String, slug: String) async throws -> ExternalSeriesDetail {
+        let encSource = source.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? source
+        let encSlug = slug.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? slug
+        let data = try await request(path: "/api/catalog/external/\(encSource)/series/\(encSlug)")
+        return try JSONDecoder().decode(ExternalSeriesDetail.self, from: data)
+    }
+
+    func externalSeriesPlay(source: String, slug: String, season: Int, episode: Int,
+                            quality: String = "1080") async throws -> ExternalPlayInfo {
+        let encSource = source.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? source
+        let encSlug = slug.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? slug
+        let path = "/api/catalog/external/\(encSource)/series/\(encSlug)/play?season=\(season)&episode=\(episode)&quality=\(quality)"
+        let data = try await request(path: path)
+        return try JSONDecoder().decode(ExternalPlayInfo.self, from: data)
+    }
+
+    static func externalPlayURL(server: String, play: ExternalPlayInfo) -> URL? {
+        let proxied = play.proxied?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !proxied.isEmpty {
+            if proxied.hasPrefix("http") { return URL(string: proxied) }
+            return URL(string: server + proxied)
+        }
+        let raw = play.url.trimmingCharacters(in: .whitespacesAndNewlines)
+        if raw.isEmpty { return nil }
+        if raw.hasPrefix("http") {
+            return PlayUrls.video(server: server, token: AuthSession.shared.api.token, path: raw)
+        }
+        return URL(string: server + raw)
     }
 
     func seriesDetail(id: Int) async throws -> SeriesDetail {
