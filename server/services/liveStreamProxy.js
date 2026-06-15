@@ -3,6 +3,7 @@ const https = require('https');
 const { configFromChannel, primarySourceUrl } = require('./channelConfig');
 const streamProxyPool = require('./streamProxyPool');
 const { resolveUrl } = require('./playlistImport');
+const { preferSpanishLatinoManifest, preferSpanishLatinoDramiyosUrl } = require('./spanishLatino');
 
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 64, keepAliveMsecs: 30000 });
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 64, keepAliveMsecs: 30000, rejectUnauthorized: false });
@@ -38,9 +39,12 @@ function defaultHeaders(extra = {}) {
 function channelHeaders(channel) {
   const config = configFromChannel(channel);
   const adv = config.advanced || {};
+  const src = (config.sources || [])[0] || {};
   const hdrs = defaultHeaders();
-  if (adv.user_agent) hdrs['User-Agent'] = adv.user_agent;
-  if (adv.referer) hdrs.Referer = adv.referer;
+  if (adv.user_agent || src.user_agent) hdrs['User-Agent'] = adv.user_agent || src.user_agent;
+  if (adv.referer || src.referer || src.playerUrl) {
+    hdrs.Referer = adv.referer || src.referer || src.playerUrl;
+  }
   if (adv.http_proxy) hdrs._proxy = adv.http_proxy;
   const url = String(channel?.stream_url || config.sources?.[0]?.url || '');
   if (config?.fast?.source === 'freetv' || /stream\.ads\.ottera\.tv/i.test(url)) {
@@ -59,10 +63,31 @@ function channelHeaders(channel) {
     hdrs.Referer = adv.referer || 'https://en-vivo.clarosports.com/';
     hdrs.Origin = 'https://en-vivo.clarosports.com';
   }
+  const tvOrigin = streamProxyPool.streamOriginFor(url);
+  if (tvOrigin) {
+    hdrs.Referer = adv.referer || hdrs.Referer;
+    hdrs.Origin = tvOrigin;
+  }
   return hdrs;
 }
 
-async function requestOnce(url, headers, binary = false) {
+function proxyCandidates(headers) {
+  if (headers._proxy) return [headers._proxy];
+  const out = [];
+  if (streamProxyPool.isEnabled()) {
+    for (const p of streamProxyPool.getProxiesToTry(6)) {
+      const raw = typeof p === 'string' ? p : (p?.raw || '');
+      if (raw) out.push(raw);
+    }
+  }
+  for (const p of streamProxyPool.listProxies()) {
+    const raw = p?.raw || p;
+    if (raw && !out.includes(raw)) out.push(raw);
+  }
+  return out;
+}
+
+async function requestOnceInner(url, headers, binary = false) {
   const proxy = headers._proxy || '';
   const cleanHeaders = { ...headers };
   delete cleanHeaders._proxy;
@@ -89,7 +114,7 @@ async function requestOnce(url, headers, binary = false) {
     const req = client.get(url, {
       agent: isHttps ? httpsAgent : httpAgent,
       timeout: 12000,
-      headers
+      headers: cleanHeaders
     }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         const next = res.headers.location.startsWith('http')
@@ -115,6 +140,26 @@ async function requestOnce(url, headers, binary = false) {
     req.on('error', reject);
     req.on('timeout', () => { req.destroy(); reject(new Error('Timeout')); });
   });
+}
+
+async function requestOnce(url, headers, binary = false) {
+  try {
+    return await requestOnceInner(url, headers, binary);
+  } catch (err) {
+    const blocked = /HTTP 40[13]/.test(String(err.message || ''));
+    if (!blocked || headers._proxy || !/ksdjugfsddeports\.com/i.test(url)) throw err;
+    const proxies = proxyCandidates(headers).filter(Boolean);
+    let lastErr = err;
+    for (const proxy of proxies.slice(0, 2)) {
+      try {
+        return await requestOnceInner(url, { ...headers, _proxy: proxy }, binary);
+      } catch (retryErr) {
+        lastErr = retryErr;
+        streamProxyPool.markFailed(proxy, retryErr.message);
+      }
+    }
+    throw lastErr;
+  }
 }
 
 async function resolveRedirect(url, headers, depth = 0) {
@@ -209,6 +254,7 @@ async function resolveBestManifest(url, headers, depth = 0, preferLowest = false
 function rewriteM3u8(content, baseUrl, token, hdrs = {}, opts = {}) {
   const mobile = !!(opts.mobile || hdrs._mobile);
   const proxyUrl = hdrs._proxy || '';
+  const body = preferSpanishLatinoManifest(content);
   const proxy = (url) => {
     let q = `url=${encodeURIComponent(url)}&token=${encodeURIComponent(token)}`;
     const ua = hdrs['User-Agent'];
@@ -222,7 +268,7 @@ function rewriteM3u8(content, baseUrl, token, hdrs = {}, opts = {}) {
     return `/api/live/stream?${q}`;
   };
 
-  let result = content.split(/\r?\n/).map((line) => {
+  let result = body.split(/\r?\n/).map((line) => {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#')) {
       if (/URI="/i.test(trimmed)) {
@@ -305,7 +351,7 @@ async function buildChannelPlaylist(channel, token, opts = {}) {
     if (playback.cookies) hdrs.Cookie = playback.cookies;
     if (needsTcResolve) hdrs.Origin = 'https://tctelevision.com';
     if (streamProxyPool.needsStreamProxy(playback.url)) {
-      hdrs.Origin = 'https://regionales.saohgdasregions.fun';
+      hdrs.Origin = streamProxyPool.streamOriginFor(playback.url) || 'https://regionales.saohgdasregions.fun';
     }
   } else if (needsTvResolve) {
     hdrs = await tvPorInternet.resolveChannelHeaders(channel, hdrs);
@@ -407,7 +453,7 @@ function pipeUpstream(url, res, reqHeaders = {}) {
 }
 
 async function fetchManifestForProxy(url, hdrs) {
-  const resolved = await resolveRedirect(url, hdrs);
+  const resolved = preferSpanishLatinoDramiyosUrl(await resolveRedirect(url, hdrs));
   const cacheKey = `proxy:${resolved}\0${hdrs.Referer || ''}\0${hdrs._proxy || ''}\0best`;
   const cached = cacheGet(manifestCache, cacheKey);
   if (cached) return cached;

@@ -43,6 +43,7 @@ public final class UpdateChecker {
     public static final String EXTRA_VERSION_NAME = "version_name";
     private static final String CHANNEL_ID = "vixtv_updates";
     private static final int NOTIFICATION_ID = 9001;
+    private static volatile boolean updateDialogVisible = false;
 
     private UpdateChecker() {}
 
@@ -297,6 +298,7 @@ public final class UpdateChecker {
                 AppCompatActivity activity = (AppCompatActivity) context;
                 if ("tv".equals(BuildConfig.PLATFORM)) {
                     showTvUpdateDialog(activity, message, versionName, downloadUrl);
+                    showUpdateNotification(context, message, versionName, downloadUrl);
                 } else {
                     showUpdateDialog(activity, message, versionName, downloadUrl);
                 }
@@ -310,7 +312,8 @@ public final class UpdateChecker {
 
     private static void showUpdateDialog(AppCompatActivity activity, String message, String versionName, String downloadUrl) {
         activity.runOnUiThread(() -> {
-            if (activity.isFinishing()) return;
+            if (activity.isFinishing() || updateDialogVisible) return;
+            updateDialogVisible = true;
             String title = versionName.isEmpty()
                 ? activity.getString(R.string.update_notification_title)
                 : activity.getString(R.string.update_notification_title_version, versionName);
@@ -320,13 +323,15 @@ public final class UpdateChecker {
                 .setPositiveButton(R.string.update_action_download, (dialog, which) ->
                     startDownload(activity, downloadUrl, versionName))
                 .setNegativeButton(android.R.string.cancel, null)
+                .setOnDismissListener(d -> updateDialogVisible = false)
                 .show();
         });
     }
 
     private static void showTvUpdateDialog(AppCompatActivity activity, String message, String versionName, String downloadUrl) {
         activity.runOnUiThread(() -> {
-            if (activity.isFinishing()) return;
+            if (activity.isFinishing() || updateDialogVisible) return;
+            updateDialogVisible = true;
             View content = LayoutInflater.from(activity).inflate(R.layout.dialog_tv_update, null);
             TextView titleView = content.findViewById(R.id.tv_update_title);
             TextView messageView = content.findViewById(R.id.tv_update_message);
@@ -354,6 +359,7 @@ public final class UpdateChecker {
                 startDownload(activity, downloadUrl, versionName);
             });
             laterBtn.setOnClickListener(v -> dialog.dismiss());
+            dialog.setOnDismissListener(d -> updateDialogVisible = false);
             dialog.show();
             downloadBtn.requestFocus();
         });
@@ -401,14 +407,18 @@ public final class UpdateChecker {
         window.setAttributes(lp);
     }
 
+    private static String launcherActivityClassName() {
+        if ("tv".equals(BuildConfig.PLATFORM)) {
+            return "tv.vix.app.TvLauncherActivity";
+        }
+        return "tv.vix.app.MobileLauncherActivity";
+    }
+
     private static void showUpdateNotification(Context context, String message, String versionName, String downloadUrl) {
         createChannel(context);
 
-        String launchClass = "tv".equals(BuildConfig.PLATFORM)
-            ? "tv.vix.app.TvShellActivity"
-            : "tv.vix.app.MainActivity";
         Intent openIntent = new Intent();
-        openIntent.setClassName(context.getPackageName(), launchClass);
+        openIntent.setClassName(context.getPackageName(), launcherActivityClassName());
         openIntent.setAction(ACTION_UPDATE);
         openIntent.putExtra(EXTRA_DOWNLOAD_URL, downloadUrl);
         openIntent.putExtra(EXTRA_VERSION_NAME, versionName);

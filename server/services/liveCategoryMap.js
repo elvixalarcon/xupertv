@@ -27,6 +27,10 @@ function isVixChannel(ch) {
 
 function classifyLiveChannel(channel) {
   if (isEcuadorChannel(channel)) return null;
+  const config = typeof channel?.config === 'string'
+    ? (() => { try { return JSON.parse(channel.config); } catch { return {}; } })()
+    : (channel?.config || {});
+  if (config.radio || String(channel?.group_title || '').trim() === 'Radio Ecuador') return null;
 
   const name = String(channel?.name || '').trim();
   const old = String(channel?.group_title || '').trim();

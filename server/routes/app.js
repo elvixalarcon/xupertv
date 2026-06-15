@@ -1,5 +1,6 @@
 const express = require('express');
 const appUpdate = require('../services/appUpdate');
+const ipaUpdate = require('../services/ipaUpdate');
 const ipaInstall = require('../services/ipaInstall');
 const desktopInstall = require('../services/desktopInstall');
 
@@ -13,9 +14,13 @@ function requestBaseUrl(req) {
 
 router.get('/update', (req, res) => {
   const raw = String(req.query.platform || '').toLowerCase();
-  const platform = raw === 'tv' ? 'tv' : 'mobile';
   const versionCode = req.query.version_code || 0;
-  res.json(appUpdate.checkUpdate(platform, versionCode, requestBaseUrl(req)));
+  const base = requestBaseUrl(req);
+  if (raw === 'ios' || raw === 'iphone' || raw === 'ipad') {
+    return res.json(ipaUpdate.checkUpdate(versionCode, base));
+  }
+  const platform = raw === 'tv' ? 'tv' : 'mobile';
+  res.json(appUpdate.checkUpdate(platform, versionCode, base));
 });
 
 router.get('/download-links', (req, res) => {
@@ -26,6 +31,7 @@ router.get('/download-links', (req, res) => {
   const tvApk = appUpdate.getApkInfo('tv');
   const mobileApk = appUpdate.getApkInfo('mobile');
   const ipa = ipaInstall.getIpaInfo();
+  const iosSettings = ipaUpdate.getPublicSettings();
   const desktop = desktopInstall.getDesktopInfo();
   const desktopVer = desktopInstall.getAppVersionInfo();
   res.json({
@@ -63,7 +69,11 @@ router.get('/download-links', (req, res) => {
     windows_version_name: desktopVer.version,
     windows_version_code: desktopVer.build,
     windows_setup_available: desktop.available,
-    windows_setup_size: desktop.size || 0
+    windows_setup_size: desktop.size || 0,
+    ios_version_name: iosSettings.app_ios_version_name,
+    ios_version_code: iosSettings.app_ios_version_code,
+    ios_update_available: iosSettings.app_ios_ipa_available
+      && (parseInt(req.query.client_ios_build || '0', 10) || 0) < iosSettings.app_ios_version_code
   });
 });
 

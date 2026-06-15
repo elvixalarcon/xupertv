@@ -34,6 +34,14 @@ public class TvLoginActivity extends AppCompatActivity {
 
         loginBtn.setOnClickListener(v -> doLogin());
         userInput.requestFocus();
+        UpdateChecker.handleUpdateIntent(this, getIntent());
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        UpdateChecker.checkAsync(this);
+        UpdateChecker.handleUpdateIntent(this, getIntent());
     }
 
     private void doLogin() {

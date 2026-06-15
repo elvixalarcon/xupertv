@@ -10,9 +10,11 @@ seedCategories();
 setImmediate(() => {
   try {
     const changed = appUpdate.syncPublishedVersions();
-    if (changed.length) console.log('[apk-ota] versiones sincronizadas:', changed.join(', '));
+    const iosChanged = ipaUpdate.syncPublishedVersions();
+    const all = [...changed, ...iosChanged];
+    if (all.length) console.log('[ota] versiones sincronizadas:', all.join(', '));
   } catch (err) {
-    console.warn('[apk-ota] sync:', err.message || err);
+    console.warn('[ota] sync:', err.message || err);
   }
 
   ensureEcdfM3utsSource()
@@ -54,6 +56,7 @@ const streamMonitor = require('./services/streamMonitor');
 const streamCache = require('./services/streamCache');
 const epgService = require('./services/epgService');
 const appUpdate = require('./services/appUpdate');
+const ipaUpdate = require('./services/ipaUpdate');
 const fastChannelsSync = require('./services/fastChannelsSync');
 const countryChannelsSync = require('./services/countryChannelsSync');
 const tvPorInternetSync = require('./services/tvPorInternetSync');
@@ -232,11 +235,13 @@ function sendPublicIpa(res, filename) {
 }
 
 function sendPublicDesktopSetup(res) {
-  const found = require('./services/desktopInstall').findSetupFile();
+  const desktopInstall = require('./services/desktopInstall');
+  const found = desktopInstall.findDesktopDownload();
   if (!found) {
     return res.status(404).send('Instalador Windows no disponible todavía. Compila con GitHub Actions o contacta al administrador.');
   }
-  res.setHeader('Content-Type', 'application/octet-stream');
+  const isZip = /\.zip$/i.test(found.file);
+  res.setHeader('Content-Type', isZip ? 'application/zip' : 'application/octet-stream');
   res.setHeader('Content-Disposition', `attachment; filename="${found.file}"`);
   res.setHeader('Cache-Control', 'public, max-age=300');
   res.sendFile(found.full);

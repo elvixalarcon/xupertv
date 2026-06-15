@@ -1,5 +1,6 @@
 import UIKit
 import AVKit
+import UserNotifications
 
 // UIKit en todas las versiones (iOS 17+): misma interfaz Tele Latino en iPhone/iPad.
 
@@ -200,6 +201,11 @@ final class UIKitLoginViewController: UIViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         gradientLayer.frame = view.bounds
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        VixUpdateChecker.check(from: self)
     }
 
     private func styleField(_ field: UITextField, placeholder: String, icon: String, secure: Bool = false) {
@@ -569,6 +575,11 @@ final class UIKitMainTabController: UITabBarController, UITabBarControllerDelega
             wrap(UIKitLiveViewController(), title: "En vivo", icon: "dot.radiowaves.left.and.right"),
             wrap(UIKitProfileViewController(), title: "Perfil", icon: "person.fill")
         ]
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        VixUpdateChecker.check(from: self)
     }
 
     func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
@@ -976,5 +987,88 @@ final class UIKitLibraryCell: UITableViewCell {
         titleLabel.text = msg
         subLabel.text = nil
         poster.image = nil
+    }
+}
+
+// MARK: - OTA updates (iOS)
+
+enum VixUpdateChecker {
+    private static var dialogVisible = false
+    private static let notifiedBuildKey = "vix_ios_update_notified_build"
+
+    static func check(from presenter: UIViewController?) {
+        guard let presenter = presenter else { return }
+        Task { await checkAndPrompt(presenter: presenter) }
+    }
+
+    private static func clientBuild() -> Int {
+        Int(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0") ?? 0
+    }
+
+    @MainActor
+    private static func checkAndPrompt(presenter: UIViewController) async {
+        let build = clientBuild()
+        let server = VixConfig.serverURL
+        guard var components = URLComponents(string: "\(server)/api/app/update") else { return }
+        components.queryItems = [
+            URLQueryItem(name: "platform", value: "ios"),
+            URLQueryItem(name: "version_code", value: String(build))
+        ]
+        guard let url = components.url else { return }
+        do {
+            var req = URLRequest(url: url)
+            req.setValue("application/json", forHTTPHeaderField: "Accept")
+            req.timeoutInterval = 12
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            guard let http = resp as? HTTPURLResponse, http.statusCode == 200 else { return }
+            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  json["update_available"] as? Bool == true else { return }
+            let versionName = json["version_name"] as? String ?? ""
+            let message = json["message"] as? String ?? "Hay una nueva versión de Vix TV."
+            let installUrl = (json["install_url"] as? String)
+                ?? (json["download_url"] as? String)
+                ?? "\(server)/ipa/install"
+            let latestCode = json["version_code"] as? Int ?? 0
+            postLocalNotification(versionName: versionName, message: message, installUrl: installUrl, latestCode: latestCode)
+            guard !dialogVisible else { return }
+            dialogVisible = true
+            let title = versionName.isEmpty ? "Actualización disponible" : "Vix TV \(versionName)"
+            let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "Más tarde", style: .cancel) { _ in
+                dialogVisible = false
+            })
+            alert.addAction(UIAlertAction(title: "Actualizar", style: .default) { _ in
+                dialogVisible = false
+                openInstall(urlString: installUrl, presenter: presenter)
+            })
+            presenter.present(alert, animated: true)
+        } catch {
+            return
+        }
+    }
+
+    @MainActor
+    private static func openInstall(urlString: String, presenter: UIViewController) {
+        guard let url = URL(string: urlString) else { return }
+        UIApplication.shared.open(url)
+    }
+
+    private static func postLocalNotification(versionName: String, message: String, installUrl: String, latestCode: Int) {
+        let last = UserDefaults.standard.integer(forKey: notifiedBuildKey)
+        guard latestCode > last else { return }
+        UserDefaults.standard.set(latestCode, forKey: notifiedBuildKey)
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+            guard granted else { return }
+            let content = UNMutableNotificationContent()
+            content.title = versionName.isEmpty ? "Actualización Vix TV" : "Vix TV \(versionName)"
+            content.body = message
+            content.sound = .default
+            if let url = URL(string: installUrl) {
+                content.userInfo = ["install_url": url.absoluteString]
+            }
+            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+            let req = UNNotificationRequest(identifier: "vixtv-ios-update-\(latestCode)", content: content, trigger: trigger)
+            UNUserNotificationCenter.current().add(req)
+        }
     }
 }

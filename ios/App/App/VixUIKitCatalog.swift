@@ -1162,8 +1162,14 @@ final class UIKitLiveViewController: UIViewController {
         categoryStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         let all = makeChip("Todos", slug: "all", selected: selectedGroup == "all")
         categoryStack.addArrangedSubview(all)
-        for c in categories.prefix(12) {
+        if categories.contains(where: { $0.name == "Radio Ecuador" }) {
+            categoryStack.addArrangedSubview(makeChip("Radio Ecuador", slug: "Radio Ecuador", selected: selectedGroup == "Radio Ecuador"))
+        }
+        var shown = categories.contains(where: { $0.name == "Radio Ecuador" }) ? 1 : 0
+        for c in categories where shown < 12 {
+            if c.name == "Radio Ecuador" { continue }
             categoryStack.addArrangedSubview(makeChip(c.name, slug: c.name, selected: selectedGroup == c.name))
+            shown += 1
         }
     }
 
@@ -1213,7 +1219,7 @@ final class UIKitLiveViewController: UIViewController {
     }
 
     private func tuneChannel(_ ch: LiveChannel, at index: Int) {
-        guard let url = PlayUrls.live(server: VixConfig.serverURL, token: AuthSession.shared.api.token, channelId: ch.id) else { return }
+        guard let url = PlayUrls.livePlayback(server: VixConfig.serverURL, token: AuthSession.shared.api.token, channel: ch) else { return }
         playingChannelId = ch.id
         UserDefaults.standard.set(ch.id, forKey: Self.lastLiveChannelKey)
         playerVC.view.isHidden = false

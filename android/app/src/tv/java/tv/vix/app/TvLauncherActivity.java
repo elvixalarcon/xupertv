@@ -11,14 +11,24 @@ public class TvLauncherActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         ServerUrlHelper.ensureDefault(getSharedPreferences(AppConstants.PREFS, MODE_PRIVATE));
+
+        boolean updateIntent = getIntent() != null
+            && UpdateChecker.ACTION_UPDATE.equals(getIntent().getAction());
+
+        Intent next;
         if (NativeAuth.hasToken(this)) {
-            Intent next = NativeAuth.needsProfileSelection(this)
+            next = NativeAuth.needsProfileSelection(this)
                 ? new Intent(this, TvProfilePickerActivity.class)
                 : new Intent(this, TvShellActivity.class);
-            startActivity(next);
         } else {
-            startActivity(new Intent(this, TvLoginActivity.class));
+            next = new Intent(this, TvLoginActivity.class);
         }
+        if (updateIntent) {
+            next.setAction(getIntent().getAction());
+            if (getIntent().getExtras() != null) next.putExtras(getIntent());
+            next.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        }
+        startActivity(next);
         finish();
     }
 }

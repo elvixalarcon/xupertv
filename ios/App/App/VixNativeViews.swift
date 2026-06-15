@@ -431,7 +431,7 @@ struct LiveNativeView: View {
     }
 
     private func playChannel(_ ch: LiveChannel) {
-        guard let url = PlayUrls.live(server: VixConfig.serverURL, token: session.api.token, channelId: ch.id) else { return }
+        guard let url = PlayUrls.livePlayback(server: VixConfig.serverURL, token: session.api.token, channel: ch) else { return }
         playingChannel = ch
         playerCtrl.play(url: url)
         showPlayer = true

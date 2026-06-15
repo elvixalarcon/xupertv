@@ -27,6 +27,13 @@ struct LiveChannel: Identifiable, Decodable {
     let logo: String?
     let group_title: String?
     let stream_url: String?
+    let radio: Bool?
+    let direct_source: Bool?
+    let playback_referer: String?
+
+    var isRadio: Bool {
+        radio == true || group_title?.trimmingCharacters(in: .whitespacesAndNewlines) == "Radio Ecuador"
+    }
 }
 
 struct LiveCategory: Identifiable, Decodable {
@@ -381,6 +388,22 @@ enum PlayUrls {
             return URL(string: "\(server)/api/live/ch/\(channelId)/play.m3u8?token=\(enc)")
         }
         return URL(string: "\(server)/api/live/ch/\(channelId)/play.m3u8?token=\(enc)&profile=mobile")
+    }
+
+    static func livePlayback(server: String, token: String, channel: LiveChannel) -> URL? {
+        if channel.isRadio,
+           let upstream = channel.stream_url?.trimmingCharacters(in: .whitespacesAndNewlines),
+           upstream.hasPrefix("http://") || upstream.hasPrefix("https://") {
+            let encTok = token.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? token
+            let encUrl = upstream.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? upstream
+            var q = "\(server)/api/live/stream?url=\(encUrl)&token=\(encTok)"
+            if let ref = channel.playback_referer?.trimmingCharacters(in: .whitespacesAndNewlines), !ref.isEmpty {
+                let encRef = ref.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ref
+                q += "&referer=\(encRef)"
+            }
+            return URL(string: q)
+        }
+        return live(server: server, token: token, channelId: channel.id)
     }
 
     static func poster(_ path: String?) -> URL? {

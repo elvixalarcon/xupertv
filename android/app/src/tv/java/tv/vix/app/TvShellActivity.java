@@ -55,17 +55,21 @@ public class TvShellActivity extends AppCompatActivity {
     private static final int SEC_DESTACADOS = 2;
     private static final int SEC_MOVIES = 3;
     private static final int SEC_SERIES = 4;
-    private static final int SEC_KIDS = 5;
-    private static final int SEC_ANIME = 6;
-    private static final int SEC_EXPLORE = 7;
+    private static final int SEC_CATEGORIES = 5;
+    private static final int SEC_KIDS = 6;
+    private static final int SEC_ANIME = 7;
+    private static final int SEC_EXPLORE = 8;
     private static final long HERO_ROTATE_MS = 4200;
     private static final long LIVE_ZAP_OSD_MS = 5000;
+    private static final long ACTIVITY_INTERVAL_MS = 8000L;
     /** Portadas visibles por fila; el resto en Ver más. */
     private static final int ROW_PREVIEW_MAX = 10;
     private static final String GROUP_ALL = "Todos";
+    private static final String[] LIVE_COUNTRY_ORDER = {};
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private final Runnable activityHeartbeatRunnable = this::sendShellActivityHeartbeat;
     private final List<ChannelItem> channels = new ArrayList<>();
     private final List<ChannelItem> visibleChannels = new ArrayList<>();
     private final List<String> liveCategoryNames = new ArrayList<>();
@@ -75,7 +79,7 @@ public class TvShellActivity extends AppCompatActivity {
 
     private View panelLive;
     private View panelCatalog;
-    private TextView navHome, navLive, navDestacados, navMovies, navSeries, navKids, navAnime, navExplore;
+    private TextView navHome, navLive, navDestacados, navMovies, navSeries, navCategories, navKids, navAnime, navExplore;
     private TextView clockView;
     private TextView notifyBadge;
     private TextView liveNowTitle;
@@ -84,6 +88,7 @@ public class TvShellActivity extends AppCompatActivity {
     private View livePlayerWrap;
     private View liveBodyRow;
     private View tvSidebar;
+    private View tvSidebarColumn;
     private View tvTopBar;
     private TextView liveFullscreenBtn;
     private ImageView heroSlideImg;
@@ -133,6 +138,7 @@ public class TvShellActivity extends AppCompatActivity {
     private TextView liveScrollDown;
     private FrameLayout livePlayerHost;
     private PlayerView livePlayerView;
+    private RadioVisualizerView liveRadioVisualizer;
     private ExoPlayer livePlayer;
     private final Runnable heroRotateRunnable = this::advanceHeroSlide;
     private ChannelAdapter channelAdapter;
@@ -142,6 +148,16 @@ public class TvShellActivity extends AppCompatActivity {
     private boolean liveInlineFullscreen;
     private int lastWatchedLiveChannelId = -1;
     private boolean liveExplicitTune;
+    private static final long UPDATE_CHECK_INTERVAL_MS = 30L * 60L * 1000L;
+    private final Runnable periodicUpdateCheck = new Runnable() {
+        @Override
+        public void run() {
+            if (!isFinishing()) {
+                UpdateChecker.checkAsync(TvShellActivity.this);
+                handler.postDelayed(this, UPDATE_CHECK_INTERVAL_MS);
+            }
+        }
+    };
     private static final String CHANNEL_PAYLOAD_PLAYING = "playing";
     private String serverBase = "";
     private String authToken = "";
@@ -161,6 +177,7 @@ public class TvShellActivity extends AppCompatActivity {
             return;
         }
         setContentView(R.layout.activity_tv_shell);
+        PlaybackScreenWake.keepOn(this, getWindow().getDecorView());
         serverBase = ServerUrlHelper.fromPrefs(getSharedPreferences(AppConstants.PREFS, MODE_PRIVATE));
         authToken = NativeAuth.getToken(this);
 
@@ -169,6 +186,7 @@ public class TvShellActivity extends AppCompatActivity {
         navDestacados = findViewById(R.id.tv_nav_destacados);
         navMovies = findViewById(R.id.tv_nav_movies);
         navSeries = findViewById(R.id.tv_nav_series);
+        navCategories = findViewById(R.id.tv_nav_categories);
         navKids = findViewById(R.id.tv_nav_kids);
         navAnime = findViewById(R.id.tv_nav_anime);
         navExplore = findViewById(R.id.tv_nav_explore);
@@ -182,6 +200,7 @@ public class TvShellActivity extends AppCompatActivity {
         setupTopBar();
 
         tvSidebar = findViewById(R.id.tv_sidebar);
+        tvSidebarColumn = findViewById(R.id.tv_sidebar_column);
         tvTopBar = findViewById(R.id.tv_top_bar);
 
         setupLivePanel();
@@ -208,9 +227,8 @@ public class TvShellActivity extends AppCompatActivity {
             if (!isFinishing()) navHome.requestFocus();
         }, 200);
         startClock();
-        handler.postDelayed(() -> {
-            if (!isFinishing()) UpdateChecker.checkAsync(TvShellActivity.this);
-        }, 3000);
+        UpdateChecker.checkAsync(this);
+        handler.postDelayed(periodicUpdateCheck, UPDATE_CHECK_INTERVAL_MS);
         UpdateChecker.handleUpdateIntent(this, getIntent());
     }
 
@@ -268,7 +286,12 @@ public class TvShellActivity extends AppCompatActivity {
                 FrameLayout.LayoutParams.MATCH_PARENT));
             livePlayerView.setUseController(false);
             livePlayerHost.addView(livePlayerView);
-            livePlayer = new ExoPlayer.Builder(this).build();
+            liveRadioVisualizer = new RadioVisualizerView(this);
+            liveRadioVisualizer.setLayoutParams(new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
+            livePlayerHost.addView(liveRadioVisualizer);
+            livePlayer = LivePlayerHelper.createPlayer(this);
             livePlayerView.setPlayer(livePlayer);
         } catch (Throwable e) {
             Toast.makeText(this, "Reproductor TV no disponible", Toast.LENGTH_LONG).show();
@@ -446,6 +469,7 @@ public class TvShellActivity extends AppCompatActivity {
         bindNavFocus(navDestacados, SEC_DESTACADOS);
         bindNavFocus(navMovies, SEC_MOVIES);
         bindNavFocus(navSeries, SEC_SERIES);
+        bindNavFocus(navCategories, SEC_CATEGORIES);
         bindNavFocus(navKids, SEC_KIDS);
         bindNavFocus(navAnime, SEC_ANIME);
         bindNavFocus(navExplore, SEC_EXPLORE);
@@ -473,7 +497,7 @@ public class TvShellActivity extends AppCompatActivity {
     private boolean isNavFocused() {
         View f = getCurrentFocus();
         return f == navHome || f == navLive || f == navDestacados || f == navMovies
-            || f == navSeries || f == navKids || f == navAnime || f == navExplore;
+            || f == navSeries || f == navCategories || f == navKids || f == navAnime || f == navExplore;
     }
 
     private void setupLivePanel() {
@@ -593,6 +617,19 @@ public class TvShellActivity extends AppCompatActivity {
                 loadPoster(liveOverlayLogo, ch.logo);
             }
         }
+        updateLiveRadioVisualizer(ch);
+    }
+
+    private void updateLiveRadioVisualizer(ChannelItem ch) {
+        if (liveRadioVisualizer == null) return;
+        boolean radio = ch != null && (ch.radio || RadioVisualizerView.isRadioGroup(ch.group));
+        liveRadioVisualizer.setActive(radio);
+        if (radio && ch != null) {
+            liveRadioVisualizer.bind(ch.name, ch.logo, serverBase);
+        }
+        if (livePlayerView != null) {
+            livePlayerView.setVisibility(radio ? View.INVISIBLE : View.VISIBLE);
+        }
     }
 
     private void updateLiveFocusChain() {
@@ -627,12 +664,16 @@ public class TvShellActivity extends AppCompatActivity {
         }
         liveInlineFullscreen = true;
         if (liveRoot != null) liveRoot.setBackgroundColor(0xFF000000);
-        if (tvSidebar != null) tvSidebar.setVisibility(View.GONE);
+        if (tvSidebarColumn != null) tvSidebarColumn.setVisibility(View.GONE);
+        else if (tvSidebar != null) tvSidebar.setVisibility(View.GONE);
         if (tvTopBar != null) tvTopBar.setVisibility(View.GONE);
         if (liveChannelDrawer != null) liveChannelDrawer.setVisibility(View.GONE);
         closeLivePanels();
         setLivePreviewChromeVisible(false);
-        if (liveBodyRow != null) liveBodyRow.setPadding(0, 0, 0, 0);
+        if (liveBodyRow instanceof LinearLayout) {
+            liveBodyRow.setPadding(0, 0, 0, 0);
+            ((LinearLayout) liveBodyRow).setGravity(android.view.Gravity.FILL);
+        }
         if (livePlayerWrap != null) {
             LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) livePlayerWrap.getLayoutParams();
             lp.width = LinearLayout.LayoutParams.MATCH_PARENT;
@@ -640,7 +681,11 @@ public class TvShellActivity extends AppCompatActivity {
             lp.weight = 0f;
             lp.setMarginEnd(0);
             livePlayerWrap.setLayoutParams(lp);
+            livePlayerWrap.requestLayout();
             livePlayerWrap.requestFocus();
+        }
+        if (livePlayerView != null) {
+            livePlayerView.setResizeMode(androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT);
         }
         unmuteLivePreview();
         syncLiveFullscreenUi();
@@ -652,16 +697,18 @@ public class TvShellActivity extends AppCompatActivity {
         hideLiveZapOsd();
         liveInlineFullscreen = false;
         if (liveRoot != null) liveRoot.setBackgroundResource(R.drawable.tv_live_bg);
-        if (tvSidebar != null) tvSidebar.setVisibility(View.VISIBLE);
+        if (tvSidebarColumn != null) tvSidebarColumn.setVisibility(View.VISIBLE);
+        else if (tvSidebar != null) tvSidebar.setVisibility(View.VISIBLE);
         if (tvTopBar != null) tvTopBar.setVisibility(View.VISIBLE);
         closeLivePanels();
         hideLiveZapOsd();
         setLivePreviewChromeVisible(true);
         if (liveChannelDrawer != null) liveChannelDrawer.setVisibility(View.VISIBLE);
-        if (liveBodyRow != null) {
+        if (liveBodyRow instanceof LinearLayout) {
             int pad = (int) (24 * getResources().getDisplayMetrics().density);
             int padTop = (int) (20 * getResources().getDisplayMetrics().density);
             liveBodyRow.setPadding(pad, padTop, pad, pad);
+            ((LinearLayout) liveBodyRow).setGravity(android.view.Gravity.CENTER_VERTICAL);
         }
         if (livePlayerWrap != null) {
             LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) livePlayerWrap.getLayoutParams();
@@ -684,11 +731,42 @@ public class TvShellActivity extends AppCompatActivity {
         liveCategoryNames.clear();
         liveCategoryNames.add(GROUP_ALL);
         Set<String> groups = new LinkedHashSet<>();
+        boolean hasRadio = false;
         for (ChannelItem ch : channels) {
             if (ch.group != null && !ch.group.isEmpty()) groups.add(ch.group);
+            if (ch.radio || RadioVisualizerView.isRadioGroup(ch.group)) hasRadio = true;
         }
+        if (hasRadio) liveCategoryNames.add("Radio Ecuador");
         List<String> sorted = new ArrayList<>(groups);
-        Collections.sort(sorted, String::compareToIgnoreCase);
+        List<String> countries = new ArrayList<>();
+        List<String> rest = new ArrayList<>();
+        for (String g : sorted) {
+            if (RadioVisualizerView.isRadioGroup(g)) continue;
+            boolean isCountry = false;
+            for (String c : LIVE_COUNTRY_ORDER) {
+                if (c.equalsIgnoreCase(g)) {
+                    isCountry = true;
+                    break;
+                }
+            }
+            if (isCountry) countries.add(g);
+            else rest.add(g);
+        }
+        Collections.sort(rest, (a, b) -> {
+            return a.compareToIgnoreCase(b);
+        });
+        List<String> orderedCountries = new ArrayList<>();
+        for (String c : LIVE_COUNTRY_ORDER) {
+            for (String g : countries) {
+                if (c.equalsIgnoreCase(g)) {
+                    orderedCountries.add(g);
+                    break;
+                }
+            }
+        }
+        sorted.clear();
+        sorted.addAll(rest);
+        sorted.addAll(orderedCountries);
         liveCategoryNames.addAll(sorted);
         if (liveCategoryAdapter != null) liveCategoryAdapter.notifyDataSetChanged();
     }
@@ -696,8 +774,11 @@ public class TvShellActivity extends AppCompatActivity {
     private void rebuildVisibleChannels() {
         int currentId = getSelectedChannelId();
         visibleChannels.clear();
+        boolean showAll = liveActiveGroup == null || liveActiveGroup.isEmpty();
         for (ChannelItem ch : channels) {
-            if (liveActiveGroup == null || liveActiveGroup.isEmpty() || liveActiveGroup.equals(ch.group)) {
+            if (showAll) {
+                if (!isLiveCountryGroup(ch.group)) visibleChannels.add(ch);
+            } else if (liveActiveGroup.equals(ch.group)) {
                 visibleChannels.add(ch);
             }
         }
@@ -904,6 +985,12 @@ public class TvShellActivity extends AppCompatActivity {
                     catalogAdapter.notifyDataSetChanged();
                     startHeroRotation();
                 }
+            } else if (section == SEC_CATEGORIES) {
+                if (!"categories".equals(lastCatalogType)) loadCategories();
+                else if (hasListHero()) {
+                    catalogAdapter.notifyDataSetChanged();
+                    startHeroRotation();
+                }
             } else if (!slug.equals(lastCatalogType)) {
                 catalogRows.clear();
                 catalogAdapter.notifyDataSetChanged();
@@ -931,6 +1018,7 @@ public class TvShellActivity extends AppCompatActivity {
         if (section == SEC_DESTACADOS) return "destacados";
         if (section == SEC_MOVIES) return "movies";
         if (section == SEC_SERIES) return "series";
+        if (section == SEC_CATEGORIES) return "categories";
         if (section == SEC_KIDS) return "kids";
         if (section == SEC_ANIME) return "anime";
         if (section == SEC_EXPLORE) return "explorar";
@@ -942,6 +1030,7 @@ public class TvShellActivity extends AppCompatActivity {
         if (section == SEC_DESTACADOS) return R.id.tv_nav_destacados;
         if (section == SEC_MOVIES) return R.id.tv_nav_movies;
         if (section == SEC_SERIES) return R.id.tv_nav_series;
+        if (section == SEC_CATEGORIES) return R.id.tv_nav_categories;
         if (section == SEC_KIDS) return R.id.tv_nav_kids;
         if (section == SEC_ANIME) return R.id.tv_nav_anime;
         if (section == SEC_EXPLORE) return R.id.tv_nav_explore;
@@ -968,7 +1057,7 @@ public class TvShellActivity extends AppCompatActivity {
     }
 
     private void highlightNav(int section) {
-        TextView[] all = { navHome, navLive, navDestacados, navMovies, navSeries, navKids, navAnime, navExplore };
+        TextView[] all = { navHome, navLive, navDestacados, navMovies, navSeries, navCategories, navKids, navAnime, navExplore };
         int dim = ContextCompat.getColor(this, R.color.tv_text_dim);
         for (TextView t : all) {
             if (t == null) continue;
@@ -981,6 +1070,7 @@ public class TvShellActivity extends AppCompatActivity {
         else if (section == SEC_DESTACADOS) active = navDestacados;
         else if (section == SEC_MOVIES) active = navMovies;
         else if (section == SEC_SERIES) active = navSeries;
+        else if (section == SEC_CATEGORIES) active = navCategories;
         else if (section == SEC_KIDS) active = navKids;
         else if (section == SEC_ANIME) active = navAnime;
         else if (section == SEC_EXPLORE) active = navExplore;
@@ -1012,9 +1102,11 @@ public class TvShellActivity extends AppCompatActivity {
 
     private int pickRandomLiveChannelPos(List<ChannelItem> list) {
         if (list == null || list.isEmpty()) return 0;
+        boolean onlyFeatured = liveActiveGroup == null || liveActiveGroup.isEmpty();
         List<Integer> pool = new ArrayList<>();
         for (int i = 0; i < list.size(); i++) {
-            if (!isSportsChannel(list.get(i))) pool.add(i);
+            ChannelItem ch = list.get(i);
+            if (!onlyFeatured || isAllowedRandomLiveChannel(ch)) pool.add(i);
         }
         if (pool.isEmpty()) {
             return new Random().nextInt(list.size());
@@ -1022,10 +1114,25 @@ public class TvShellActivity extends AppCompatActivity {
         return pool.get(new Random().nextInt(pool.size()));
     }
 
-    private static boolean isSportsChannel(ChannelItem ch) {
-        if (ch == null || ch.group == null) return false;
-        String g = ch.group.toLowerCase(Locale.ROOT);
-        return g.contains("deporte") || g.contains("sport");
+    private static boolean isAllowedRandomLiveChannel(ChannelItem ch) {
+        if (ch == null || ch.group == null || ch.group.isEmpty()) return false;
+        if (isLiveCountryGroup(ch.group)) return false;
+        String g = ch.group.trim();
+        if (g.equalsIgnoreCase("Ecuador")) return true;
+        if (g.equalsIgnoreCase("Deportes")) return true;
+        if (g.equalsIgnoreCase("Películas") || g.toLowerCase(Locale.ROOT).startsWith("cine")) return true;
+        if (g.startsWith("Pluto TV ·")) return true;
+        if ("VIX".equals(g) || g.startsWith("ViX ·")) return true;
+        if (g.equalsIgnoreCase("Freetv")) return true;
+        return false;
+    }
+
+    private static boolean isLiveCountryGroup(String group) {
+        if (group == null) return false;
+        for (String c : LIVE_COUNTRY_ORDER) {
+            if (c.equalsIgnoreCase(group)) return true;
+        }
+        return false;
     }
 
     private void loadLiveEpgAsync() {
@@ -1152,9 +1259,16 @@ public class TvShellActivity extends AppCompatActivity {
                         ch.optInt("id", 0),
                         ch.optString("name", ""),
                         ch.optString("logo", ""),
-                        ch.optString("group_title", "")
+                        ch.optString("group_title", ""),
+                        ch.optInt("order", 0),
+                        ch.optBoolean("radio", false)
+                            || RadioVisualizerView.isRadioGroup(ch.optString("group_title", "")),
+                        ch.optString("stream_url", ""),
+                        ch.optInt("direct_source", 0) == 1,
+                        ch.optString("playback_referer", "")
                     ));
                 }
+                sortLiveChannelList(list);
                 runOnUiThread(() -> {
                     if (isFinishing()) return;
                     channels.clear();
@@ -1175,7 +1289,13 @@ public class TvShellActivity extends AppCompatActivity {
                     }
                 });
             } catch (Exception e) {
-                runOnUiThread(() -> Toast.makeText(this, e.getMessage(), Toast.LENGTH_LONG).show());
+                runOnUiThread(() -> {
+                    if (TvSessionHelper.isAuthError(e)) {
+                        TvSessionHelper.redirectToLogin(this, e.getMessage());
+                    } else {
+                        Toast.makeText(this, e.getMessage(), Toast.LENGTH_LONG).show();
+                    }
+                });
             }
         });
     }
@@ -1430,37 +1550,18 @@ public class TvShellActivity extends AppCompatActivity {
         }
     }
 
-    private void loadMovies() {
-        lastCatalogType = "movies";
+    private void loadCategories() {
+        lastCatalogType = "categories";
         loadCatalogStart();
         executor.execute(() -> {
             try {
                 VixApi api = new VixApi(this);
                 HeroData hero = fetchMoviesHero(api);
-                List<CatalogRow> rows = new ArrayList<>();
-                JSONArray genreRows = api.moviesGenreRows();
-                for (int i = 0; i < genreRows.length(); i++) {
-                    JSONObject row = genreRows.getJSONObject(i);
-                    JSONArray items = row.optJSONArray("movies");
-                    if (items == null) items = row.optJSONArray("items");
-                    if (items == null || items.length() == 0) continue;
-                    int total = row.optInt("count", items.length());
-                    int max = Math.min(ROW_PREVIEW_MAX, items.length());
-                    List<CatalogItem> list = new ArrayList<>();
-                    for (int j = 0; j < max; j++) {
-                        list.add(itemFromMovie(items.getJSONObject(j)));
-                    }
-                    rows.add(new CatalogRow(
-                        row.optString("genre", ""),
-                        list,
-                        false,
-                        null,
-                        row.optString("genre", ""),
-                        "movie",
-                        total
-                    ));
-                }
-                publishMovies(hero, rows);
+                JSONObject page = api.catalogCategories();
+                List<CatalogRow> rows = parseStorefrontSections(page);
+                HeroData finalHero = hero;
+                List<CatalogRow> finalRows = rows;
+                runOnUiThread(() -> publishStorefront(finalHero, finalRows));
             } catch (Exception e) {
                 publishCatalogError(e);
             }
@@ -1615,7 +1716,7 @@ public class TvShellActivity extends AppCompatActivity {
             JSONArray hero = page.optJSONArray("hero");
             if (hero != null) {
                 for (int i = 0; i < hero.length(); i++) {
-                    allHero.add(itemFromStorefront(hero.getJSONObject(i)));
+                    allHero.add(itemFromStorefront(hero.getJSONObject(i), defaultContentTypeForSlug(slug)));
                 }
             }
         }
@@ -1627,7 +1728,7 @@ public class TvShellActivity extends AppCompatActivity {
         JSONArray recent = page.optJSONArray("recent");
         if (recent != null) {
             for (int i = 0; i < Math.min(4, recent.length()); i++) {
-                tiles[i] = itemFromStorefront(recent.getJSONObject(i));
+                tiles[i] = itemFromStorefront(recent.getJSONObject(i), defaultContentTypeForSlug(slug));
             }
         }
         for (int i = 0; i < 4; i++) {
@@ -1650,13 +1751,13 @@ public class TvShellActivity extends AppCompatActivity {
                 if (items == null || items.length() == 0) continue;
                 int total = sec.optInt("total", items.length());
                 int max = Math.min(ROW_PREVIEW_MAX, items.length());
-                List<CatalogItem> list = new ArrayList<>();
-                for (int j = 0; j < max; j++) {
-                    list.add(itemFromStorefront(items.getJSONObject(j)));
-                }
                 String rowType = sec.optString("type", "movie");
                 if ("mixed".equals(rowType)) {
-                    rowType = items.getJSONObject(0).optString("content_type", "movie");
+                    rowType = resolveContentType(items.getJSONObject(0), "movie");
+                }
+                List<CatalogItem> list = new ArrayList<>();
+                for (int j = 0; j < max; j++) {
+                    list.add(itemFromStorefront(items.getJSONObject(j), rowType));
                 }
                 rows.add(new CatalogRow(
                     sec.optString("title", ""),
@@ -1672,9 +1773,48 @@ public class TvShellActivity extends AppCompatActivity {
         return rows;
     }
 
+    private static String defaultContentTypeForSlug(String slug) {
+        if ("series".equals(slug)) return "series";
+        return "movie";
+    }
+
+    private static String resolveContentType(JSONObject o, String fallback) {
+        return TvCatalogHelper.resolveContentType(o, fallback);
+    }
+
     private CatalogItem itemFromStorefront(JSONObject o) {
-        if ("series".equals(o.optString("content_type", ""))) return itemFromSeries(o);
+        return itemFromStorefront(o, "movie");
+    }
+
+    private CatalogItem itemFromStorefront(JSONObject o, String defaultType) {
+        if (TvCatalogHelper.isExternalItem(o)) return itemFromExternal(o);
+        if ("series".equals(resolveContentType(o, defaultType))) return itemFromSeries(o);
         return itemFromMovie(o);
+    }
+
+    private CatalogItem itemFromExternal(JSONObject o) {
+        String type = o.optString("content_type", "movie");
+        boolean isSeries = "series".equals(type);
+        return new CatalogItem(
+            0,
+            o.optString("title", ""),
+            o.optString("poster", ""),
+            o.optString("backdrop", o.optString("poster", "")),
+            heroBannerFromJson(o, isSeries),
+            "",
+            null,
+            isSeries,
+            type,
+            0,
+            0,
+            0,
+            null,
+            TvPosterBind.ratingFromJson(o),
+            true,
+            o.optString("source", ""),
+            o.optString("slug", ""),
+            o.optInt("year", 0)
+        );
     }
 
     private void publishStorefront(HeroData hero, List<CatalogRow> rows) {
@@ -1712,6 +1852,10 @@ public class TvShellActivity extends AppCompatActivity {
 
     private void publishCatalogError(Exception e) {
         runOnUiThread(() -> {
+            if (TvSessionHelper.isAuthError(e)) {
+                TvSessionHelper.redirectToLogin(this, e.getMessage());
+                return;
+            }
             catalogLoading.setVisibility(View.GONE);
             catalogEmpty.setVisibility(View.VISIBLE);
             catalogEmpty.setText(e.getMessage());
@@ -1784,6 +1928,21 @@ public class TvShellActivity extends AppCompatActivity {
     }
 
     private void openCatalogItem(CatalogItem item) {
+        if (item == null) return;
+        if (item.external) {
+            if (item.source == null || item.source.isEmpty() || item.slug == null || item.slug.isEmpty()) {
+                Toast.makeText(this, "Contenido no disponible", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (item.isSeries) {
+                TvCatalogHelper.openExternalSeries(this, item.source, item.slug,
+                    item.title, item.banner, item.backdrop, item.poster);
+            } else {
+                TvCatalogHelper.openExternalMovie(this, item.source, item.slug, item.year,
+                    item.title, item.banner, item.backdrop, item.poster);
+            }
+            return;
+        }
         if (item.isSeries && "series".equals(item.contentType)) {
             Intent i = new Intent(this, TvSeriesDetailActivity.class);
             i.putExtra(TvSeriesDetailActivity.EXTRA_SERIES_ID, item.id);
@@ -1835,16 +1994,18 @@ public class TvShellActivity extends AppCompatActivity {
             try {
                 ensureLivePlayer();
                 if (livePlayer == null) return;
-                String url = PlayUrls.live(serverBase, authToken, ch.id);
+                String url = PlayUrls.livePlayback(
+                    serverBase,
+                    authToken,
+                    ch.id,
+                    ch.streamUrl,
+                    ch.directSource,
+                    ch.radio || RadioVisualizerView.isRadioGroup(ch.group),
+                    ch.playbackReferer,
+                    ActivitySession.shellKey(this)
+                );
                 if (url == null || url.isEmpty()) return;
-                DefaultHttpDataSource.Factory factory = new DefaultHttpDataSource.Factory()
-                    .setUserAgent("VixTV/1.0 tv")
-                    .setAllowCrossProtocolRedirects(true);
-                MediaSource source = new HlsMediaSource.Factory(factory)
-                    .createMediaSource(MediaItem.fromUri(Uri.parse(url)));
-                livePlayer.setMediaSource(source);
-                livePlayer.prepare();
-                livePlayer.setPlayWhenReady(true);
+                LivePlayerHelper.start(livePlayer, url, "VixTV/1.0 tv", authToken);
             } catch (Throwable t) {
                 Toast.makeText(TvShellActivity.this, "Canal no disponible", Toast.LENGTH_SHORT).show();
             }
@@ -1852,17 +2013,23 @@ public class TvShellActivity extends AppCompatActivity {
     }
 
     private void loadPoster(ImageView iv, String poster) {
-        loadPoster(iv, poster, null);
+        loadPoster(iv, poster, null, null, 0);
     }
 
     private void loadPoster(ImageView iv, String primary, String fallback) {
+        loadPoster(iv, primary, fallback, null, 0);
+    }
+
+    private void loadPoster(ImageView iv, String primary, String fallback, String title, int year) {
         if (iv == null) return;
-        String url = PlayUrls.poster(serverBase, primary);
+        String url = title != null && !title.isEmpty()
+            ? PlayUrls.posterForItem(serverBase, title, year, primary)
+            : PlayUrls.poster(serverBase, primary);
         String fallbackUrl = fallback != null ? PlayUrls.poster(serverBase, fallback) : "";
         Object tag = iv.getTag(R.id.tv_ch_logo);
         if (url.isEmpty()) {
             if (!fallbackUrl.isEmpty()) {
-                loadPoster(iv, fallback, null);
+                loadPoster(iv, fallback, null, title, year);
                 return;
             }
             iv.setTag(R.id.tv_ch_logo, "");
@@ -1886,10 +2053,13 @@ public class TvShellActivity extends AppCompatActivity {
 
     private void loadHeroImage(ImageView iv, CatalogItem item) {
         if (iv == null || item == null) return;
+        String realArt = TvPreviewExtras.pickImage("", item.backdrop, item.poster);
         String primary = heroImg(item);
-        String fallback = TvPreviewExtras.pickImage("", item.backdrop, item.poster);
-        if (fallback.isEmpty()) fallback = item.poster;
-        loadPoster(iv, primary, fallback);
+        if (!PlayUrls.isPlaceholderPoster(realArt) && realArt.startsWith("http")) {
+            primary = realArt;
+        }
+        String fallback = realArt.isEmpty() ? item.poster : realArt;
+        loadPoster(iv, primary, fallback, item.title, item.year);
     }
 
     private void releasePlayer() {
@@ -1899,9 +2069,63 @@ public class TvShellActivity extends AppCompatActivity {
         }
     }
 
+    private void startShellActivityHeartbeat() {
+        handler.removeCallbacks(activityHeartbeatRunnable);
+        sendShellActivityHeartbeat();
+        handler.postDelayed(activityHeartbeatRunnable, ACTIVITY_INTERVAL_MS);
+    }
+
+    private void stopShellActivityHeartbeat() {
+        handler.removeCallbacks(activityHeartbeatRunnable);
+        executor.execute(() -> new VixApi(this).sendActivityOffline(ActivitySession.shellKey(this)));
+    }
+
+    private void sendShellActivityHeartbeat() {
+        handler.postDelayed(activityHeartbeatRunnable, ACTIVITY_INTERVAL_MS);
+        String status = "browsing";
+        String page = "home";
+        String title = "Inicio";
+        String contentType = "";
+        int contentId = 0;
+        if (currentSection == SEC_LIVE && selectedChannelPos >= 0 && selectedChannelPos < visibleChannels.size()) {
+            ChannelItem ch = visibleChannels.get(selectedChannelPos);
+            status = (livePlayer != null && livePlayer.getPlayWhenReady()) ? "watching_live" : "browsing";
+            page = "live";
+            title = ch.name != null ? ch.name : "Canal en vivo";
+            contentType = "live";
+            contentId = ch.id;
+        } else {
+            switch (currentSection) {
+                case SEC_LIVE: page = "live"; title = "TV En vivo"; break;
+                case SEC_DESTACADOS: page = "destacados"; title = "Destacados"; break;
+                case SEC_MOVIES: page = "movies"; title = "Películas"; break;
+                case SEC_SERIES: page = "series"; title = "Series"; break;
+                case SEC_CATEGORIES: page = "categories"; title = "Categorías"; break;
+                case SEC_KIDS: page = "kids"; title = "Kids"; break;
+                case SEC_ANIME: page = "anime"; title = "Anime"; break;
+                case SEC_EXPLORE: page = "explorar"; title = "Explorar"; break;
+                default: page = "home"; title = "Inicio"; break;
+            }
+        }
+        final String fStatus = status;
+        final String fPage = page;
+        final String fTitle = title;
+        final String fType = contentType;
+        final int fCid = contentId;
+        final String sid = ActivitySession.shellKey(this);
+        executor.execute(() -> new VixApi(TvShellActivity.this).sendActivityHeartbeat(
+            fStatus, fPage, fTitle, fType, fCid, 0L, 0L, sid
+        ));
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
+        PlaybackScreenWake.keepOn(this, getWindow().getDecorView());
+        handler.removeCallbacks(periodicUpdateCheck);
+        handler.postDelayed(periodicUpdateCheck, UPDATE_CHECK_INTERVAL_MS);
+        UpdateChecker.checkAsync(this);
+        startShellActivityHeartbeat();
         loadNotifyBadge();
         if (currentSection == SEC_HOME && "home".equals(lastCatalogType)) {
             refreshContinueRow(null);
@@ -1919,6 +2143,7 @@ public class TvShellActivity extends AppCompatActivity {
 
     @Override
     protected void onStop() {
+        stopShellActivityHeartbeat();
         if (currentSection != SEC_LIVE) {
             releasePlayer();
         } else if (!liveInlineFullscreen && livePlayer != null) {
@@ -1929,6 +2154,8 @@ public class TvShellActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        handler.removeCallbacks(periodicUpdateCheck);
+        PlaybackScreenWake.release(this, getWindow().getDecorView());
         stopHeroRotation();
         handler.removeCallbacksAndMessages(null);
         executor.shutdownNow();
@@ -2054,16 +2281,55 @@ public class TvShellActivity extends AppCompatActivity {
         }
     }
 
+    private static final String[] DEPORTES_ORDER = {
+        "dsports", "win sports", "tyc sports", "fox deportes",
+        "espn premium", "espn deportes", "dsports 2", "claro sports", "bein sports"
+    };
+
+    private static int deportesSortKey(ChannelItem ch) {
+        if (ch == null || ch.group == null || !ch.group.equalsIgnoreCase("Deportes")) return 9999;
+        String n = ch.name != null ? ch.name.toLowerCase(Locale.ROOT).trim() : "";
+        for (int i = 0; i < DEPORTES_ORDER.length; i++) {
+            if (n.equals(DEPORTES_ORDER[i])) return i;
+        }
+        return ch.order > 0 ? ch.order + 100 : 9999;
+    }
+
+    private static void sortLiveChannelList(List<ChannelItem> list) {
+        Collections.sort(list, (a, b) -> {
+            boolean aRadio = "Radio Ecuador".equalsIgnoreCase(a.group);
+            boolean bRadio = "Radio Ecuador".equalsIgnoreCase(b.group);
+            if (aRadio != bRadio) return aRadio ? 1 : -1;
+            int g = a.group.compareToIgnoreCase(b.group);
+            if (g != 0) return g;
+            int ak = deportesSortKey(a);
+            int bk = deportesSortKey(b);
+            if (ak != bk) return ak - bk;
+            return a.name.compareToIgnoreCase(b.name);
+        });
+    }
+
     private static class ChannelItem {
         final int id;
         final String name;
         final String logo;
         final String group;
-        ChannelItem(int id, String name, String logo, String group) {
+        final int order;
+        final boolean radio;
+        final String streamUrl;
+        final boolean directSource;
+        final String playbackReferer;
+        ChannelItem(int id, String name, String logo, String group, int order, boolean radio,
+                    String streamUrl, boolean directSource, String playbackReferer) {
             this.id = id;
             this.name = name;
             this.logo = logo;
             this.group = group != null ? group : "";
+            this.order = order;
+            this.radio = radio;
+            this.streamUrl = streamUrl != null ? streamUrl : "";
+            this.directSource = directSource;
+            this.playbackReferer = playbackReferer != null ? playbackReferer : "";
         }
     }
 
@@ -2082,10 +2348,22 @@ public class TvShellActivity extends AppCompatActivity {
         final String banner;
         final String trailer;
         final double rating;
+        final boolean external;
+        final String source;
+        final String slug;
+        final int year;
 
         CatalogItem(int id, String title, String poster, String backdrop, String banner, String trailer,
                     String videoPath, boolean isSeries, String contentType, int seriesId,
                     long progress, long duration, String subtitle, double rating) {
+            this(id, title, poster, backdrop, banner, trailer, videoPath, isSeries, contentType,
+                seriesId, progress, duration, subtitle, rating, false, "", "", 0);
+        }
+
+        CatalogItem(int id, String title, String poster, String backdrop, String banner, String trailer,
+                    String videoPath, boolean isSeries, String contentType, int seriesId,
+                    long progress, long duration, String subtitle, double rating,
+                    boolean external, String source, String slug, int year) {
             this.id = id;
             this.title = title;
             this.poster = poster;
@@ -2100,6 +2378,10 @@ public class TvShellActivity extends AppCompatActivity {
             this.duration = duration;
             this.subtitle = subtitle;
             this.rating = rating;
+            this.external = external;
+            this.source = source != null ? source : "";
+            this.slug = slug != null ? slug : "";
+            this.year = year;
         }
     }
 
@@ -2408,6 +2690,9 @@ public class TvShellActivity extends AppCompatActivity {
             int rowIndex = hasListHero() ? position - 1 : position;
             CatalogRow row = catalogRows.get(rowIndex);
             rh.label.setText(row.label);
+            rh.recycler.setNestedScrollingEnabled(false);
+            rh.recycler.setHasFixedSize(true);
+            rh.recycler.setFocusable(false);
             rh.recycler.setLayoutManager(new LinearLayoutManager(TvShellActivity.this, LinearLayoutManager.HORIZONTAL, false));
             rh.recycler.setAdapter(new RowItemsAdapter(row));
         }
@@ -2469,7 +2754,7 @@ public class TvShellActivity extends AppCompatActivity {
             PosterHolder ph = (PosterHolder) holder;
             CatalogItem item = row.items.get(position);
             ph.title.setText(item.title);
-            loadPoster(ph.image, item.poster);
+            loadPoster(ph.image, item.poster, null, item.title, item.year);
             if (row.continueRow) {
                 TvPosterBind.bindRatingBadge(ph.rating, 0);
                 int pct = continueProgressPercent(item);
@@ -2491,8 +2776,19 @@ public class TvShellActivity extends AppCompatActivity {
                 ph.progressLabel.setVisibility(View.GONE);
                 TvPosterBind.bindRatingBadge(ph.rating, item.rating);
             }
-            ph.itemView.setOnClickListener(v -> openCatalogItem(item));
-            bindEnter(ph.itemView, () -> openCatalogItem(item));
+            ph.itemView.setClickable(true);
+            ph.itemView.setFocusable(true);
+            ph.itemView.setFocusableInTouchMode(true);
+            ph.itemView.setOnClickListener(v -> {
+                int pos = ph.getBindingAdapterPosition();
+                if (pos == RecyclerView.NO_POSITION || pos >= row.items.size()) return;
+                openCatalogItem(row.items.get(pos));
+            });
+            bindEnter(ph.itemView, () -> {
+                int pos = ph.getBindingAdapterPosition();
+                if (pos == RecyclerView.NO_POSITION || pos >= row.items.size()) return;
+                openCatalogItem(row.items.get(pos));
+            });
             ph.itemView.setOnFocusChangeListener((v, has) -> TvFocusAnim.applyPoster(v, has));
         }
 

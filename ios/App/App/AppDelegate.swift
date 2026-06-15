@@ -13,6 +13,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         window.rootViewController = VixAppRouter.rootViewController()
         window.makeKeyAndVisible()
         self.window = window
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            VixUpdateChecker.check(from: window.rootViewController)
+        }
         return true
     }
 }
