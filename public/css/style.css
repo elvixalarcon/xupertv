@@ -1356,6 +1356,62 @@ body.live-page-fullscreen .live-pluto-hero-player.live-hero-fullscreen {
   flex: 1 1 auto;
 }
 
+/* TV / WebView: pantalla completa solo con CSS (requestFullscreen rompe el layout) */
+html.vix-tv body.live-page-fullscreen,
+html.vix-native.vix-tv body.live-page-fullscreen {
+  overflow: hidden;
+}
+
+html.vix-tv body.live-page-fullscreen #page-live.active,
+html.vix-native.vix-tv body.live-page-fullscreen #page-live.active {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  max-height: none;
+  z-index: 99999;
+  padding: 0;
+  margin: 0;
+}
+
+html.vix-tv body.live-page-fullscreen .live-pluto,
+html.vix-native.vix-tv body.live-page-fullscreen .live-pluto {
+  height: 100%;
+  min-height: 0;
+}
+
+html.vix-tv body.live-page-fullscreen .live-pluto-hero,
+html.vix-native.vix-tv body.live-page-fullscreen .live-pluto-hero {
+  height: 100%;
+  flex: 1 1 auto;
+}
+
+html.vix-tv .live-pluto-hero-player.live-hero-fullscreen,
+html.vix-native.vix-tv .live-pluto-hero-player.live-hero-fullscreen {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  z-index: 100000;
+}
+
+html.vix-tv .live-pluto-hero-player.live-hero-fullscreen #live-preview-video,
+html.vix-native.vix-tv .live-pluto-hero-player.live-hero-fullscreen #live-preview-video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain;
+}
+
+html.vix-tv body.live-page-fullscreen .topbar,
+html.vix-native.vix-tv body.live-page-fullscreen .topbar {
+  display: none !important;
+}
+
 .live-ctrl-btn.is-active {
   background: rgba(255, 255, 255, 0.18);
 }
@@ -1637,6 +1693,85 @@ body.live-page-fullscreen .live-pluto-hero-player.live-hero-fullscreen {
 .live-pluto-hero-placeholder span {
   font-size: 2rem;
   opacity: .7;
+}
+
+.live-radio-visualizer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at center, rgba(18, 18, 32, .92) 0%, rgba(0, 0, 0, .98) 72%);
+  pointer-events: none;
+}
+
+.live-radio-visualizer.hidden { display: none; }
+
+.live-radio-visualizer-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 24px;
+  text-align: center;
+}
+
+.live-radio-logo {
+  width: clamp(72px, 18vw, 120px);
+  height: clamp(72px, 18vw, 120px);
+  object-fit: contain;
+  filter: drop-shadow(0 8px 24px rgba(245, 197, 24, .35));
+  animation: live-radio-logo-pulse 2.4s ease-in-out infinite;
+}
+
+.live-radio-eq {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 6px;
+  height: 56px;
+}
+
+.live-radio-eq span {
+  display: block;
+  width: 7px;
+  border-radius: 4px 4px 1px 1px;
+  background: linear-gradient(180deg, #f5c518 0%, #c9970f 100%);
+  transform-origin: bottom center;
+  animation: live-radio-eq-bar 1.1s ease-in-out infinite;
+}
+
+.live-radio-eq span:nth-child(1) { animation-delay: 0s; height: 18px; }
+.live-radio-eq span:nth-child(2) { animation-delay: .12s; height: 28px; }
+.live-radio-eq span:nth-child(3) { animation-delay: .24s; height: 40px; }
+.live-radio-eq span:nth-child(4) { animation-delay: .08s; height: 52px; }
+.live-radio-eq span:nth-child(5) { animation-delay: .2s; height: 36px; }
+.live-radio-eq span:nth-child(6) { animation-delay: .32s; height: 24px; }
+.live-radio-eq span:nth-child(7) { animation-delay: .16s; height: 44px; }
+
+.live-radio-label {
+  margin: 0;
+  max-width: min(90%, 420px);
+  color: rgba(255, 255, 255, .88);
+  font-size: clamp(.9rem, 2.2vw, 1.05rem);
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+
+.live-pluto-hero-player.is-radio #live-preview-video,
+.player-video-wrap.is-radio #video-player {
+  opacity: 0;
+}
+
+@keyframes live-radio-logo-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.06); opacity: .92; }
+}
+
+@keyframes live-radio-eq-bar {
+  0%, 100% { transform: scaleY(.35); opacity: .55; }
+  50% { transform: scaleY(1); opacity: 1; }
 }
 
 .live-pluto-bottom {
@@ -4255,6 +4390,217 @@ html.vix-mobile.vix-native .mob-nav-account {
   font-size: 1.05rem;
 }
 
+/* Carrusel Mundial FIFA — estilo Paramount+ */
+#mundial-carousel-mount:empty {
+  display: none;
+}
+
+.vix-mundial-carousel {
+  margin: 4px 0 8px;
+  padding: 8px 0 4px;
+  animation: vix-mundial-in 0.35s ease;
+}
+
+@keyframes vix-mundial-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+.vix-mundial-carousel__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 var(--page-pad, 24px) 10px;
+}
+
+.vix-mundial-carousel__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.vix-mundial-carousel__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e50914;
+  flex-shrink: 0;
+  box-shadow: 0 0 8px rgba(229, 9, 20, 0.65);
+}
+
+.vix-mundial-carousel__track.is-dragging {
+  cursor: grabbing;
+  scroll-snap-type: none;
+}
+
+.vix-mundial-carousel__track.is-dragging .vix-mundial-card {
+  pointer-events: none;
+}
+
+.vix-mundial-carousel__track {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  padding: 0 var(--page-pad, 24px) 8px;
+  scroll-padding-left: var(--page-pad, 24px);
+  scroll-padding-right: var(--page-pad, 24px);
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  overscroll-behavior-x: contain;
+  cursor: grab;
+  scrollbar-width: none;
+}
+
+.vix-mundial-carousel__track::-webkit-scrollbar {
+  display: none;
+}
+
+.vix-mundial-card {
+  flex: 0 0 auto;
+  width: min(220px, 42vw);
+  scroll-snap-align: start;
+  border: none;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.vix-mundial-card:focus-visible {
+  outline: 2px solid var(--accent, #e50914);
+  outline-offset: 3px;
+  border-radius: 10px;
+}
+
+.vix-mundial-card__visual {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  border-radius: 8px;
+  overflow: hidden;
+  background: linear-gradient(
+    135deg,
+    var(--home-color, #1a3a5c) 0%,
+    var(--home-color, #1a3a5c) 50%,
+    var(--away-color, #0d2137) 50%,
+    var(--away-color, #0d2137) 100%
+  );
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.vix-mundial-card:hover .vix-mundial-card__visual,
+.vix-mundial-card:focus-visible .vix-mundial-card__visual {
+  transform: scale(1.03);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.vix-mundial-card__badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  padding: 3px 7px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+.vix-mundial-card__badge.is-live {
+  color: #ff4d4d;
+}
+
+.vix-mundial-card__teams {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding-top: 8px;
+}
+
+.vix-mundial-card__flag {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45));
+}
+
+.vix-mundial-card__flag-ph {
+  width: 44px;
+  height: 44px;
+}
+
+.vix-mundial-card__wc {
+  font-size: 1.6rem;
+  line-height: 1;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5));
+}
+
+.vix-mundial-card__brand {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  z-index: 2;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+.vix-mundial-card__meta {
+  margin-top: 8px;
+  min-width: 0;
+}
+
+.vix-mundial-card__line1 {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.72);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vix-mundial-card__line2 {
+  margin-top: 2px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vix-native.vix-tv .vix-mundial-card {
+  width: 260px;
+}
+
+.vix-native.vix-tv .vix-mundial-carousel__title {
+  font-size: 1.2rem;
+}
+
+@media (max-width: 600px) {
+  .vix-mundial-carousel__header,
+  .vix-mundial-carousel__track {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
 .trailer-ios-hint {
   margin: 0 0 10px;
   padding: 10px 12px;
@@ -4906,3 +5252,93 @@ html.vix-account-mobile #page-mylist .mylist-tab {
 html.vix-account-mobile #page-mylist .mylist-panel {
   padding: 0 16px;
 }
+
+/* Vix TV — app de escritorio Windows (Electron, misma UI web) */
+html.vix-windows.vix-native {
+  color-scheme: dark;
+}
+
+html.vix-windows.vix-native body {
+  background: #07070d;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+html.vix-windows.vix-native #mobile-bottom-nav,
+html.vix-windows.vix-native .mobile-bottom-nav,
+html.vix-windows.vix-native .ios-menu-bar {
+  display: none !important;
+}
+
+html.vix-windows.vix-native .topnav {
+  display: flex !important;
+}
+
+html.vix-windows.vix-native .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 120;
+  background: rgba(7, 7, 13, 0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(245, 197, 24, 0.12);
+}
+
+html.vix-windows.vix-native .page {
+  padding-bottom: 24px;
+}
+
+html.vix-windows.vix-native .card {
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+html.vix-windows.vix-native .card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+html.vix-windows.vix-native .btn-primary,
+html.vix-windows.vix-native .btn-secondary,
+html.vix-windows.vix-native .nav-btn,
+html.vix-windows.vix-native .search-trigger-btn {
+  cursor: pointer;
+}
+
+html.vix-windows.vix-native ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+html.vix-windows.vix-native ::-webkit-scrollbar-thumb {
+  background: rgba(245, 197, 24, 0.35);
+  border-radius: 8px;
+}
+
+html.vix-windows.vix-native ::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+html.vix-windows.vix-native .login-box {
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+}
+
+html.vix-windows.vix-native .login-server-hint {
+  color: #9aa0b4;
+  font-size: 0.82rem;
+  margin-top: 10px;
+}
+
+html.vix-windows.vix-native .live-pluto-hero-player.live-hero-fullscreen,
+html.vix-windows.vix-native body.live-page-fullscreen .live-pluto {
+  width: 100%;
+  max-width: 100%;
+}
+
+html.vix-windows.vix-native .account-mobile-head,
+html.vix-windows.vix-native .account-logout-btn {
+  display: none;
+}
+
+html.vix-windows.vix-native .account-web-actions.is-visible {
+  display: flex;
+}
+

@@ -1,0 +1,79 @@
+# Compila instalador Windows (Electron + NSIS) en GitHub Actions.
+name: Windows Desktop
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - 'desktop/**'
+      - 'data/desktop/**'
+      - '.github/workflows/windows-desktop.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: desktop
+        run: npm install
+
+      - name: Build Windows installer
+        working-directory: desktop
+        run: npm run dist
+
+      - name: Publish installer to data/desktop
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./desktop/package.json').version")
+          mkdir -p data/desktop
+          SETUP=$(find desktop/dist -maxdepth 1 -name 'VixTV-Setup-*.exe' | head -1)
+          if [ -z "$SETUP" ]; then
+            echo "Installer not found in desktop/dist"
+            ls -la desktop/dist || true
+            exit 1
+          fi
+          cp "$SETUP" data/desktop/VixTV-Setup.exe
+          BUILD=$(date +%s)
+          cat > data/desktop/versions.json <<EOF
+          {
+            "version": "${VERSION}",
+            "versionName": "${VERSION}",
+            "versionCode": ${BUILD},
+            "filename": "VixTV-Setup.exe",
+            "platform": "windows"
+          }
+          EOF
+          ls -lh data/desktop/
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VixTV-Windows-Setup
+          path: |
+            data/desktop/VixTV-Setup.exe
+            data/desktop/versions.json
+          retention-days: 30
+
+      - name: Publish to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./desktop/package.json').version")
+          TAG="windows-v${VERSION}"
+          gh release view "$TAG" >/dev/null 2>&1 && \
+            gh release upload "$TAG" data/desktop/VixTV-Setup.exe data/desktop/versions.json --clobber || \
+            gh release create "$TAG" data/desktop/VixTV-Setup.exe data/desktop/versions.json \
+              --title "Vix TV Windows ${VERSION}" \
+              --notes "Instalador NSIS para Windows 10/11 (x64). Descarga también desde /descargar#windows"

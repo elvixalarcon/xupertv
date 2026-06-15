@@ -3,12 +3,18 @@ const path = require('path');
 const fs = require('fs');
 const db = require('./db');
 const { seedCategories } = require('./services/categories');
-const { ensureLiveCatalogChannels } = require('./services/tvPorInternet');
 const { ensureEcdfVertvSource } = require('./services/vertvCable');
 const { ensureEcdfM3utsSource } = require('./services/m3utsSync');
 seedCategories();
 
 setImmediate(() => {
+  try {
+    const changed = appUpdate.syncPublishedVersions();
+    if (changed.length) console.log('[apk-ota] versiones sincronizadas:', changed.join(', '));
+  } catch (err) {
+    console.warn('[apk-ota] sync:', err.message || err);
+  }
+
   ensureEcdfM3utsSource()
     .then((row) => {
       if (row.ok) {
@@ -25,12 +31,6 @@ setImmediate(() => {
     })
     .catch((err) => console.warn('[live-catalog] ECDF VerTvCable:', err.message || err));
 
-  ensureLiveCatalogChannels(['El Canal del Fútbol', 'ECDF'])
-    .then((rows) => {
-      const ok = rows.filter((r) => r.ok);
-      if (ok.length) console.log('[live-catalog] Deportes/ECDF:', ok.map((r) => r.name).join(', '));
-    })
-    .catch((err) => console.warn('[live-catalog] ECDF:', err.message || err));
 });
 
 const authRoutes = require('./routes/auth');
@@ -49,16 +49,18 @@ const catalogRoutes = require('./routes/catalog');
 const searchRoutes = require('./routes/search');
 const notificationRoutes = require('./routes/notifications');
 const appRoutes = require('./routes/app');
+const v1Routes = require('./routes/v1');
 const streamMonitor = require('./services/streamMonitor');
 const streamCache = require('./services/streamCache');
 const epgService = require('./services/epgService');
+const appUpdate = require('./services/appUpdate');
 const fastChannelsSync = require('./services/fastChannelsSync');
+const countryChannelsSync = require('./services/countryChannelsSync');
 const tvPorInternetSync = require('./services/tvPorInternetSync');
 const tcTelevisionSync = require('./services/tcTelevisionSync');
 const vixSync = require('./services/vixSync');
 const gamavisionSync = require('./services/gamavisionSync');
-const vodNightlySync = require('./services/vodNightlySync');
-
+const { mountObsHlsPassthrough } = require('./services/obsHlsPassthrough');
 const app = express();
 const PORT = process.env.PORT || 80;
 const PORT2 = process.env.PORT2 || 8080;
@@ -66,6 +68,34 @@ const DATA = path.join(__dirname, '..', 'data');
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+mountObsHlsPassthrough(app);
+
+function isFakeMp4Container(fullPath) {
+  try {
+    const buf = Buffer.alloc(12);
+    const fd = fs.openSync(fullPath, 'r');
+    fs.readSync(fd, buf, 0, 12, 0);
+    fs.closeSync(fd);
+    return buf.slice(4, 8).toString() !== 'ftyp';
+  } catch {
+    return false;
+  }
+}
+
+function redirectFakeMp4ToStream(subdir) {
+  return (req, res, next) => {
+    if (!/\.mp4$/i.test(req.path)) return next();
+    const name = path.basename(req.path);
+    const full = path.join(DATA, subdir, name);
+    if (!fs.existsSync(full) || !isFakeMp4Container(full)) return next();
+    return res.redirect(302, `/api/stream/${subdir}/${encodeURIComponent(name)}`);
+  };
+}
+
+app.use('/uploads/movies', redirectFakeMp4ToStream('movies'));
+app.use('/uploads/series', redirectFakeMp4ToStream('series'));
+app.use('/uploads/winscp', redirectFakeMp4ToStream('winscp'));
 
 app.use('/uploads/movies', express.static(path.join(DATA, 'movies'), {
   setHeaders(res, filePath) {
@@ -95,6 +125,23 @@ app.use('/uploads/apk', express.static(path.join(DATA, 'apk'), {
     }
   }
 }));
+app.use('/uploads/desktop', express.static(path.join(DATA, 'desktop'), {
+  setHeaders(res, filePath) {
+    if (/\.exe$/i.test(filePath)) {
+      res.setHeader('Content-Type', 'application/octet-stream');
+      res.setHeader('Content-Disposition', 'attachment');
+      res.setHeader('Cache-Control', 'public, max-age=300');
+    }
+  }
+}));
+app.use('/uploads/rtmp-broadcast', express.static(path.join(DATA, 'rtmp-broadcast'), {
+  setHeaders(res, filePath) {
+    if (/\.(mp4|webm|mov|mkv|avi)$/i.test(filePath)) {
+      res.setHeader('Accept-Ranges', 'bytes');
+      res.setHeader('Cache-Control', 'private, max-age=3600');
+    }
+  }
+}));
 app.use('/uploads/winscp', express.static(path.join(DATA, 'winscp'), {
   setHeaders(res, filePath) {
     if (/\.(mp4|webm|mov|mkv|avi)$/i.test(filePath)) {
@@ -104,16 +151,34 @@ app.use('/uploads/winscp', express.static(path.join(DATA, 'winscp'), {
   }
 }));
 
+const liveCacheStaticHandlers = new Map();
+
+function liveCacheStaticFor(channelId) {
+  if (!liveCacheStaticHandlers.has(channelId)) {
+    const dir = streamCache.channelCacheDir(channelId);
+    liveCacheStaticHandlers.set(channelId, express.static(dir, {
+      setHeaders(r, filePath) {
+        r.setHeader('Access-Control-Allow-Origin', '*');
+        if (/\.m3u8$/i.test(filePath)) r.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+        if (/\.ts$/i.test(filePath)) r.setHeader('Content-Type', 'video/mp2t');
+      }
+    }));
+  }
+  return liveCacheStaticHandlers.get(channelId);
+}
+
 app.use('/cache/live/:channelId', (req, res, next) => {
-  const channelId = req.params.channelId;
-  const dir = streamCache.channelCacheDir(channelId);
-  express.static(dir, {
-    setHeaders(r, filePath) {
-      r.setHeader('Access-Control-Allow-Origin', '*');
-      if (/\.m3u8$/i.test(filePath)) r.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
-      if (/\.ts$/i.test(filePath)) r.setHeader('Content-Type', 'video/mp2t');
-    }
-  })(req, res, next);
+  const channelId = parseInt(req.params.channelId, 10);
+  if (Number.isFinite(channelId) && channelId > 0 && /\.m3u8(\?|$)/i.test(req.url)) {
+    try {
+      const ch = db.prepare('SELECT * FROM live_channels WHERE id = ?').get(channelId);
+      if (ch && streamCache.relayActiveForChannel(ch)) {
+        streamCache.ensureRelayRunning(ch).catch(() => {});
+      }
+    } catch { /* serve static anyway */ }
+  }
+  if (!Number.isFinite(channelId) || channelId <= 0) return next();
+  return liveCacheStaticFor(channelId)(req, res, next);
 });
 
 app.use('/api/auth', authRoutes);
@@ -132,6 +197,8 @@ app.use('/api/catalog', catalogRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/app', appRoutes);
+app.use('/api/worldcup', require('./routes/worldcup'));
+app.use('/api/v1', v1Routes);
 app.use('/api/trailers', require('./routes/trailers'));
 
 function sendPublicApk(res, filename) {
@@ -164,8 +231,20 @@ function sendPublicIpa(res, filename) {
   res.sendFile(full);
 }
 
+function sendPublicDesktopSetup(res) {
+  const found = require('./services/desktopInstall').findSetupFile();
+  if (!found) {
+    return res.status(404).send('Instalador Windows no disponible todavía. Compila con GitHub Actions o contacta al administrador.');
+  }
+  res.setHeader('Content-Type', 'application/octet-stream');
+  res.setHeader('Content-Disposition', `attachment; filename="${found.file}"`);
+  res.setHeader('Cache-Control', 'public, max-age=300');
+  res.sendFile(found.full);
+}
+
 app.get('/apk/tv', (req, res) => sendPublicApk(res, 'VixTV-tv.apk'));
 app.get('/apk/mobile', (req, res) => sendPublicApk(res, 'VixTV-mobile.apk'));
+app.get('/desktop/setup', (req, res) => sendPublicDesktopSetup(res));
 app.get('/ipa/ios', (req, res) => sendPublicIpa(res, ipaInstall.IPA_FILE));
 app.get('/ipa/manifest.plist', (req, res) => {
   const info = ipaInstall.getIpaInfo();
@@ -186,11 +265,15 @@ app.get('/ipa/install', (req, res) => {
 });
 app.get('/d/tv', (req, res) => res.redirect(302, '/apk/tv'));
 app.get('/d/m', (req, res) => res.redirect(302, '/apk/mobile'));
+app.get('/d/win', (req, res) => res.redirect(302, '/desktop/setup'));
+app.get('/d/windows', (req, res) => res.redirect(302, '/desktop/setup'));
 app.get('/d/ipa', (req, res) => res.redirect(302, '/ipa/install'));
 app.get('/d/ios', (req, res) => res.redirect(302, '/descargar#iphone'));
 app.get('/iphone', (req, res) => res.redirect(302, '/descargar#iphone'));
 app.get('/ios', (req, res) => res.redirect(302, '/descargar#iphone'));
 app.get('/tv', (req, res) => res.redirect(302, '/apk/tv'));
+app.get('/win', (req, res) => res.redirect(302, '/desktop/setup'));
+app.get('/windows', (req, res) => res.redirect(302, '/descargar#windows'));
 app.get('/descargar', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'descargar.html'));
 });
@@ -215,7 +298,9 @@ app.get('/api/stream/duration', async (req, res) => {
   res.json({ duration: duration || 0 });
 });
 
-app.get('/api/stream/*', (req, res) => {
+app.get('/api/stream/*', async (req, res) => {
+  const { markUploadStreamActivity } = require('./services/streamActivity');
+  markUploadStreamActivity(req);
   const filePath = req.params[0];
   const publicPath = `/uploads/${filePath}`;
   const { resolvePlayablePath, absFromPublic } = require('./services/playablePath');
@@ -224,14 +309,19 @@ app.get('/api/stream/*', (req, res) => {
   if (!fullPath.startsWith(DATA) || !fs.existsSync(fullPath)) {
     return res.status(404).end();
   }
-  let ext = path.extname(fullPath).toLowerCase();
+  const ext = path.extname(fullPath).toLowerCase();
+  const { remuxLocalFile, transcodeLocalFile, probeContainerFormat } = require('./routes/live');
   if (ext === '.mkv') {
-    const { remuxLocalFile } = require('./routes/live');
     return remuxLocalFile(fullPath, res, req);
   }
   if (/\.(avi|wmv|flv)$/.test(ext)) {
-    const { transcodeLocalFile } = require('./routes/live');
     return transcodeLocalFile(fullPath, res, req);
+  }
+  if (ext === '.mp4' || ext === '.mov') {
+    const fmt = await probeContainerFormat(fullPath);
+    if (fmt.includes('mpegts') || fmt === 'mpeg-ts' || fmt === 'ts') {
+      return remuxLocalFile(fullPath, res, req);
+    }
   }
   const stat = fs.statSync(fullPath);
   const types = { '.mp4': 'video/mp4', '.webm': 'video/webm', '.mkv': 'video/x-matroska', '.avi': 'video/x-msvideo', '.mov': 'video/quicktime' };
@@ -239,6 +329,8 @@ app.get('/api/stream/*', (req, res) => {
   const range = req.headers.range;
   res.setHeader('Accept-Ranges', 'bytes');
   res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
   if (range) {
     const parts = range.replace(/bytes=/, '').split('-');
     const start = parseInt(parts[0], 10);
@@ -259,40 +351,72 @@ app.get('/api/stream/*', (req, res) => {
   }
 });
 
-app.use(express.static(path.join(__dirname, '..', 'public')));
+app.get('/', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
+});
+
+app.use(express.static(path.join(__dirname, '..', 'public'), {
+  setHeaders(res, filePath) {
+    if (/\.(html|js)$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+    }
+  }
+}));
 
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'admin.html'));
 });
 
 app.get('*', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`Vix TV corriendo en http://0.0.0.0:${PORT}`);
   console.log('Admin: admin / admin123');
+  try {
+    const pf = require('./services/platformFeatures');
+    if (!pf.externalCatalog) {
+      console.log('[platform] catálogos externos desactivados (cuevana, allcalidad, cinecalidad)');
+    }
+    if (!pf.countryChannels) {
+      console.log('[platform] canales por país desactivados (sync IPTV/Teleame)');
+    }
+  } catch { /* ignore */ }
   streamMonitor.startMonitor();
+  require('./services/sportsStreamWatch').startSportsStreamWatch();
   try {
     const db = require('./db');
     const relayCount = db.prepare('SELECT COUNT(*) as c FROM live_channels WHERE cache_enabled = 1').get().c;
-    const BOOT_RELAY_LIMIT = 25;
-    if (relayCount > 0 && relayCount <= BOOT_RELAY_LIMIT) {
-      streamCache.startAllEnabledCaches({ batchSize: 3, delayMs: 2000 })
-        .catch((e) => console.warn('[relay] auto-start:', e.message));
-    } else if (relayCount > BOOT_RELAY_LIMIT) {
-      console.log(`[relay] ${relayCount} canales con restream; arranque bajo demanda (límite arranque ${BOOT_RELAY_LIMIT})`);
-    }
+    console.log(`[relay] ${relayCount} canales con restream; arranque bajo demanda al reproducir`);
   } catch (e) {
     console.warn('[cache] auto-start:', e.message);
   }
+  setTimeout(() => {
+    require('./services/rtmpPush').startAllAutoPushes().catch((e) => {
+      console.warn('[rtmp] auto-start:', e.message);
+    });
+  }, 15000);
   epgService.startEpgScheduler();
   fastChannelsSync.startFastChannelsScheduler();
+  countryChannelsSync.startCountryChannelsScheduler();
+  try {
+    const xuiSync = require('./services/xuiSync');
+    xuiSync.ensureVixredObsDirectChannels();
+    const r = xuiSync.ensureVixredDeportesChannel();
+    if (r.created) console.log(`[live] Copia VixredTv en Deportes (#${r.id})`);
+  } catch (e) {
+    console.warn('[live] VixredTv:', e.message);
+  }
   tvPorInternetSync.startTvPorInternetScheduler();
   tcTelevisionSync.startTcTelevisionScheduler();
   vixSync.startVixScheduler();
   gamavisionSync.startGamavisionScheduler();
-  vodNightlySync.startVodNightlyScheduler();
   require('./services/platformSync').startPlatformSyncScheduler();
   require('./services/bannerArt').startBannerWarmScheduler();
   try {
@@ -312,6 +436,13 @@ app.listen(PORT, '0.0.0.0', () => {
       clearPrepJob(m.id);
     }
   } catch { /* ignore */ }
+});
+server.keepAliveTimeout = 5000;
+server.headersTimeout = 10000;
+if (typeof server.requestTimeout === 'number') server.requestTimeout = 30000;
+server.on('connection', (socket) => {
+  socket.setTimeout(120000);
+  socket.on('timeout', () => socket.destroy());
 });
 
 if (PORT2 && PORT2 != PORT) {

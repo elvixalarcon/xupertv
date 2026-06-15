@@ -1,6 +1,7 @@
 const express = require('express');
 const appUpdate = require('../services/appUpdate');
 const ipaInstall = require('../services/ipaInstall');
+const desktopInstall = require('../services/desktopInstall');
 
 const router = express.Router();
 
@@ -25,6 +26,8 @@ router.get('/download-links', (req, res) => {
   const tvApk = appUpdate.getApkInfo('tv');
   const mobileApk = appUpdate.getApkInfo('mobile');
   const ipa = ipaInstall.getIpaInfo();
+  const desktop = desktopInstall.getDesktopInfo();
+  const desktopVer = desktopInstall.getAppVersionInfo();
   res.json({
     tv_apk: `${base}/apk/tv`,
     mobile_apk: `${base}/apk/mobile`,
@@ -52,7 +55,15 @@ router.get('/download-links', (req, res) => {
     tv_apk_available: settings.app_tv_apk_available,
     mobile_apk_available: settings.app_mobile_apk_available,
     tv_apk_size: tvApk?.size || 0,
-    mobile_apk_size: mobileApk?.size || 0
+    mobile_apk_size: mobileApk?.size || 0,
+    windows_setup: `${base}/desktop/setup`,
+    windows_setup_direct: `${base}/uploads/desktop/VixTV-Setup.exe`,
+    windows_short: `${base}/d/win`,
+    windows_code: `${base}/win`,
+    windows_version_name: desktopVer.version,
+    windows_version_code: desktopVer.build,
+    windows_setup_available: desktop.available,
+    windows_setup_size: desktop.size || 0
   });
 });
 

@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="/icons/icon-192.svg">
   <link rel="manifest" href="/manifest.json">
   <title>Vix TV</title>
-  <link rel="stylesheet" href="/css/style.css?v=163">
+  <link rel="stylesheet" href="/css/style.css?v=172">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
@@ -126,6 +126,7 @@
           </div>
           <div class="hero-dots" id="hero-dots"></div>
         </div>
+        <div id="mundial-carousel-mount"></div>
         <section class="catalog-row catalog-row--continue hidden" id="row-continue-section" data-section-id="continue-watching">
           <div class="catalog-row__header">
             <div>
@@ -246,6 +247,15 @@
           <div class="live-pluto-hero" id="live-hero">
             <div class="live-pluto-hero-player" id="live-hero-player">
               <video id="live-preview-video" playsinline webkit-playsinline x-webkit-airplay="allow" muted autoplay preload="auto" title="Doble clic para ampliar o minimizar"></video>
+              <div class="live-radio-visualizer hidden" id="live-radio-visualizer" aria-hidden="true">
+                <div class="live-radio-visualizer-inner">
+                  <img src="/icons/icon-192.svg" alt="" class="live-radio-logo" id="live-radio-logo" />
+                  <div class="live-radio-eq" aria-hidden="true">
+                    <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+                  </div>
+                  <p class="live-radio-label" id="live-radio-label"></p>
+                </div>
+              </div>
               <div class="live-pluto-hero-placeholder" id="live-hero-placeholder">
                 <span aria-hidden="true">📺</span>
                 <p>Selecciona un canal en la guía</p>
@@ -320,6 +330,15 @@
         <h3 id="player-title"></h3>
         <div class="player-video-wrap" id="player-video-wrap">
           <video id="video-player" playsinline webkit-playsinline x-webkit-airplay="allow" x5-playsinline x5-video-player-type="h5" preload="auto"></video>
+          <div class="live-radio-visualizer hidden" id="player-radio-visualizer" aria-hidden="true">
+            <div class="live-radio-visualizer-inner">
+              <img src="/icons/icon-192.svg" alt="" class="live-radio-logo" id="player-radio-logo" />
+              <div class="live-radio-eq" aria-hidden="true">
+                <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+              </div>
+              <p class="live-radio-label" id="player-radio-label"></p>
+            </div>
+          </div>
           <div class="player-skip-hint hidden" id="player-skip-hint"></div>
           <div class="player-tap-zones" id="player-tap-zones">
             <button type="button" class="player-tap-zone player-tap-back" id="player-tap-back" aria-label="Retroceder 10 segundos"></button>
@@ -471,6 +490,6 @@
     return false;
   };
   </script>
-  <script src="/js/app.js?v=198"></script>
+  <script src="/js/app.js?v=221"></script>
 </body>
 </html>

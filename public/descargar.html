@@ -158,10 +158,41 @@
     <p class="lead" id="page-lead">Elige tu dispositivo. En Android instalas un APK; en iPhone instalas la app nativa desde Safari (sin App Store).</p>
 
     <div class="tabs" id="tabs">
+      <button type="button" class="tab" data-panel="windows">🖥️ Windows PC</button>
       <button type="button" class="tab" data-panel="iphone">📱 iPhone / iPad</button>
       <button type="button" class="tab" data-panel="android-tv">📺 Android TV</button>
       <button type="button" class="tab" data-panel="android-mobile">🤖 Android móvil</button>
     </div>
+
+    <section id="windows" class="panel">
+      <div class="card" id="card-windows-native">
+        <div class="label">App de escritorio (Windows)</div>
+        <span class="badge" id="badge-windows-version">Vix TV Windows</span>
+        <p style="margin:12px 0 8px;color:#ccc;line-height:1.55">
+          Instala <strong>Vix TV</strong> en tu PC con Windows 10 u 11. Misma interfaz que la web,
+          optimizada para ratón y teclado, con pantalla completa (F11) y reproducción fluida.
+        </p>
+        <div class="actions">
+          <a class="btn" id="btn-download-windows" href="/desktop/setup">Descargar instalador</a>
+          <a class="btn btn-secondary" id="btn-windows-page" href="/win">Atajo /win</a>
+        </div>
+        <p id="meta-windows" style="color:#888;font-size:13px;margin:12px 0 0"></p>
+        <a class="url" id="url-windows" href="/d/win" style="margin-top:10px;font-size:.95rem">/d/win</a>
+      </div>
+      <div class="card">
+        <div class="label">Instalación</div>
+        <ol>
+          <li>Descarga el instalador <strong>VixTV-Setup.exe</strong>.</li>
+          <li>Ejecuta el archivo y sigue el asistente (puedes elegir la carpeta).</li>
+          <li>Abre <strong>Vix TV</strong> desde el escritorio o el menú Inicio.</li>
+          <li>La app ya apunta a este servidor; usa el menú <strong>Vix TV → Cambiar servidor</strong> si necesitas otra URL.</li>
+        </ol>
+        <p class="note note-warn" style="margin-top:14px">
+          Si Windows SmartScreen advierte sobre un editor desconocido, elige <strong>Más información → Ejecutar de todas formas</strong>
+          (instalador sin firma de código comercial).
+        </p>
+      </div>
+    </section>
 
     <section id="iphone" class="panel">
       <div class="card" id="card-ipa-native">
@@ -320,16 +351,46 @@
         const parts = [mobVer, formatBytes(links.mobile_apk_size)].filter(Boolean);
         metaMob.textContent = parts.length ? `Última versión publicada: ${parts.join(' · ')}` : '';
       }
+
+      const winVer = links.windows_version_name ? `v${links.windows_version_name}` : '';
+      const badgeWin = document.getElementById('badge-windows-version');
+      const btnWin = document.getElementById('btn-download-windows');
+      const urlWin = document.getElementById('url-windows');
+      const metaWin = document.getElementById('meta-windows');
+      const cardWin = document.getElementById('card-windows-native');
+      if (badgeWin) badgeWin.textContent = winVer ? `Windows ${winVer}` : 'Vix TV Windows';
+      if (urlWin) {
+        const short = links.windows_short || base + '/d/win';
+        urlWin.textContent = short.replace(base, '') || '/d/win';
+        urlWin.href = short;
+      }
+      if (btnWin) {
+        if (links.windows_setup_available !== false) {
+          btnWin.href = links.windows_setup || links.windows_setup_direct || base + '/desktop/setup';
+          btnWin.classList.remove('hidden');
+        } else {
+          btnWin.classList.add('hidden');
+        }
+      }
+      if (metaWin) {
+        const parts = [winVer, formatBytes(links.windows_setup_size)].filter(Boolean);
+        metaWin.textContent = parts.length ? `Última versión publicada: ${parts.join(' · ')}` : '';
+      }
+      if (cardWin && links.windows_setup_available === false) {
+        cardWin.querySelector('.actions')?.classList.add('hidden');
+      }
     }
 
     applyDownloadLinks({
       tv_short: base + '/d/tv',
       mobile_short: base + '/d/m',
+      windows_short: base + '/d/win',
       ios_short: base + '/d/ios',
       ios_install: base + '/descargar#iphone',
       tv_code: base + '/tv',
       tv_apk: base + '/apk/tv',
-      mobile_apk: base + '/apk/mobile'
+      mobile_apk: base + '/apk/mobile',
+      windows_setup: base + '/desktop/setup'
     });
 
     fetch(base + '/api/app/download-links')
@@ -343,6 +404,7 @@
       || window.matchMedia('(display-mode: standalone)').matches;
 
     const panels = {
+      windows: document.getElementById('windows'),
       iphone: document.getElementById('iphone'),
       'android-tv': document.getElementById('android-tv'),
       'android-mobile': document.getElementById('android-mobile')
@@ -357,7 +419,9 @@
       if (lead) {
         lead.textContent = name === 'iphone'
           ? 'Instala la app nativa Vix TV en iPhone o iPad desde Safari (sin App Store).'
-          : 'Elige tu dispositivo. En Android instalas un APK; en iPhone instalas la app nativa desde Safari (sin App Store).';
+          : name === 'windows'
+            ? 'Descarga el instalador de Vix TV para Windows 10/11 (PC de escritorio).'
+            : 'Elige tu dispositivo. En Android instalas un APK; en iPhone instalas la app nativa desde Safari (sin App Store).';
       }
     }
 
@@ -366,9 +430,12 @@
     });
 
     const hash = (location.hash || '').replace('#', '');
-    const defaultPanel = hash === 'iphone' || hash === 'ios' ? 'iphone'
+    const isWindowsUa = /Windows NT/i.test(navigator.userAgent);
+    const defaultPanel = hash === 'windows' || hash === 'win' ? 'windows'
+      : hash === 'iphone' || hash === 'ios' ? 'iphone'
       : hash === 'android-mobile' || hash === 'mobile' ? 'android-mobile'
       : hash === 'android-tv' || hash === 'tv' ? 'android-tv'
+      : isWindowsUa ? 'windows'
       : isIOS ? 'iphone' : 'android-tv';
     showPanel(defaultPanel);
 

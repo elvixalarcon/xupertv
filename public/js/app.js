@@ -118,11 +118,12 @@ function getVixPlatform() {
   if (window.VIXTV_NATIVE?.platform) return window.VIXTV_NATIVE.platform;
   if (isCapacitorIos()) return 'ios';
   const q = new URLSearchParams(location.search).get('vix_platform');
-  if (q === 'tv' || q === 'mobile' || q === 'ios') return q;
+  if (q === 'tv' || q === 'mobile' || q === 'ios' || q === 'windows') return q;
   const ua = navigator.userAgent || '';
   if (/VixTV\/[^\s]+\s+tv\b/i.test(ua)) return 'tv';
   if (/VixTV\/[^\s]+\s+mobile\b/i.test(ua)) return 'mobile';
   if (/VixTV\/[^\s]+\s+ios\b/i.test(ua)) return 'ios';
+  if (/VixTV\/[^\s]+\s+windows\b/i.test(ua)) return 'windows';
   if (/Android TV|Google TV|AFT[A-Z0-9]|Bravia|SmartTV|Tizen.*TV|Web0S/i.test(ua)) return 'tv';
   return 'mobile';
 }
@@ -143,15 +144,20 @@ function isTvNativeApp() {
   return isVixNativeApp() && getVixPlatform() === 'tv';
 }
 
+function isWindowsNativeApp() {
+  return isVixNativeApp() && getVixPlatform() === 'windows';
+}
+
 const VIX_PLATFORM = getVixPlatform();
 const VIX_NATIVE_APP = isVixNativeApp();
 let vixTvFocusedEl = null;
 
 function applyVixPlatformUi() {
   const platform = getVixPlatform();
-  document.documentElement.classList.remove('vix-tv', 'vix-mobile', 'vix-ios');
+  document.documentElement.classList.remove('vix-tv', 'vix-mobile', 'vix-ios', 'vix-windows');
   document.documentElement.classList.add(`vix-${platform}`);
   if (isVixNativeApp()) document.documentElement.classList.add('vix-native');
+  if (isWindowsNativeApp()) document.documentElement.classList.add('vix-desktop');
   if (isCapacitorIos()) {
     document.documentElement.classList.add('vix-capacitor');
     if (isAppleMobile() && Math.min(screen.width, screen.height) >= 768) {
@@ -159,6 +165,10 @@ function applyVixPlatformUi() {
     }
     try { document.body.style.webkitOverflowScrolling = 'touch'; } catch { /* ignore */ }
     document.getElementById('vix-update-banner')?.remove();
+  }
+  if (platform === 'windows') {
+    document.getElementById('vix-update-banner')?.remove();
+    initDesktopBridge();
   }
   if (platform === 'tv') {
     applyTvNavFocusables();
@@ -294,8 +304,32 @@ function updateNativeLoginHint() {
   if (!hint || !isVixNativeApp()) return;
   const server = window.VIXTV_NATIVE?.server || location.origin;
   const display = (server || 'https://tv.vixred.com').replace(/\/$/, '');
-  hint.textContent = `Servidor: ${display} · Menú o Ajustes para cambiar la URL`;
+  if (isWindowsNativeApp()) {
+    hint.textContent = `Servidor: ${display} · Menú Vix TV → Cambiar servidor`;
+  } else {
+    hint.textContent = `Servidor: ${display} · Menú o Ajustes para cambiar la URL`;
+  }
   hint.classList.remove('hidden');
+}
+
+function initDesktopBridge() {
+  if (window.__vixDesktopBridgeReady || !window.VixDesktop?.onOpenSettings) return;
+  window.__vixDesktopBridgeReady = true;
+  window.VixDesktop.onOpenSettings(async () => {
+    let current = location.origin;
+    try {
+      current = (await window.VixDesktop.getServerUrl?.()) || current;
+    } catch { /* ignore */ }
+    const next = window.prompt('URL del servidor Vix TV', current.replace(/\/$/, ''));
+    if (!next) return;
+    try {
+      const res = await window.VixDesktop.setServerUrl?.(next.trim());
+      if (res?.ok) toast('Servidor actualizado', false);
+      else toast(res?.error || 'No se pudo cambiar el servidor', true);
+    } catch {
+      toast('No se pudo cambiar el servidor', true);
+    }
+  });
 }
 
 function trackTvFocus() {
@@ -821,6 +855,7 @@ async function apiCached(path, opts = {}, ttl = EXTERNAL_API_CACHE_MS) {
 }
 
 function prefetchExternalCatalogs() {
+  return;
   if (!canAccess('movies') && !canAccess('series')) return;
   const sources = ['allcalidad', 'cinecalidad'];
   for (const src of sources) {
@@ -1746,6 +1781,7 @@ let livePreviewMuted = false;
 let livePreviewScheduleTimer = null;
 let livePreviewGen = 0;
 let livePreviewRecoverCount = 0;
+let livePreviewHealthyTicks = 0;
 let livePreviewGraceUntil = 0;
 let liveAudioControlsBound = false;
 let liveHeroHoverBound = false;
@@ -2064,6 +2100,7 @@ function updateLiveHero(channel) {
     }
     if (timeStart) timeStart.textContent = '';
     if (timeEnd) timeEnd.textContent = '';
+    syncLiveRadioVisualizer(null, { scope: 'preview' });
     return;
   }
   $('#live-hero-overlay')?.classList.remove('hidden');
@@ -2081,6 +2118,7 @@ function updateLiveHero(channel) {
     barFill.style.width = `${pct || 8}%`;
     barFill.style.animation = pct ? 'none' : '';
   }
+  syncLiveRadioVisualizer(channel, { scope: 'preview' });
 }
 
 function clearLivePreviewWatchdog() {
@@ -2108,24 +2146,57 @@ function nudgeLiveHlsToEdge(hls, video) {
   } catch (_) {}
 }
 
-function attachLiveHlsHandlers(hls, video, { preview = false, autoplay = true } = {}) {
+function attachLiveHlsHandlers(hls, video, { preview = false, autoplay = true, channel = null } = {}) {
   if (!hls || !video) return;
+  const ch = channel || resolveLiveChannel(selectedLiveChannelId);
+  const obsStream = isObsLowLatencyStream(ch);
+  let proxyFallbackTried = false;
   hls.on(Hls.Events.ERROR, (_, data) => {
     if (!data.fatal) return;
+    if (!proxyFallbackTried && data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+      if (ch && /ksdjugfsddeports\.com/i.test(ch.stream_url || '') && ch.playback_referer) {
+        proxyFallbackTried = true;
+        const fallbackUrl = liveProxiedStreamUrl(ch);
+        hls.loadSource(fallbackUrl);
+        hls.startLoad(-1);
+        return;
+      }
+    }
     if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
       hls.startLoad(-1);
+      video.play().catch(() => {});
       return;
     }
     if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
       hls.recoverMediaError();
-      nudgeLiveHlsToEdge(hls, video);
+      if (!obsStream) nudgeLiveHlsToEdge(hls, video);
+      else video.play().catch(() => {});
+      return;
+    }
+    if (obsStream) {
+      hls.startLoad(-1);
+      video.play().catch(() => {});
       return;
     }
     if (liveHlsOwner === 'player' && !playerClosing) recoverLivePlayer(false);
     else if (liveHlsOwner === 'preview') recoverLivePreview(false);
   });
   if (Hls.Events.BUFFER_STALLED) {
-    hls.on(Hls.Events.BUFFER_STALLED, () => nudgeLiveHlsToEdge(hls, video));
+    let bufferStallCount = 0;
+    hls.on(Hls.Events.BUFFER_STALLED, () => {
+      if (obsStream) {
+        hls.startLoad(-1);
+        video.play().catch(() => {});
+        return;
+      }
+      nudgeLiveHlsToEdge(hls, video);
+      if (!needsAggressiveLiveRecovery(ch)) return;
+      bufferStallCount += 1;
+      if (bufferStallCount < 3) return;
+      bufferStallCount = 0;
+      if (liveHlsOwner === 'player' && !playerClosing) recoverLivePlayer(true);
+      else if (liveHlsOwner === 'preview') recoverLivePreview(true);
+    });
   }
   hls.on(Hls.Events.MANIFEST_PARSED, () => {
     applyLiveMaxQuality(hls);
@@ -2139,33 +2210,59 @@ function startLiveStallWatchdog(video, {
   onRecover,
   intervalMs = 2000,
   stallTicks = 5,
+  aggressive = false,
   mode = 'preview'
 }) {
   const clear = mode === 'preview' ? clearLivePreviewWatchdog : clearLivePlayerWatchdog;
   clear();
   if (!video) return;
-  if (isAppleMobile() && !getHls?.()) return;
+  if (isAppleMobile() && !getHls?.() && !aggressive) return;
 
   let lastTime = video.currentTime || 0;
   let ticks = 0;
+  let wasPlaying = false;
 
   const timer = setInterval(() => {
     if (!isActive()) {
       clear();
       return;
     }
-    if (!video || video.paused || video.readyState < 2) return;
+    if (!video || video.readyState < 2) return;
+
+    if (!video.paused) wasPlaying = true;
+
+    if (aggressive && wasPlaying && video.paused) {
+      ticks += 1;
+      if (ticks >= 2) {
+        ticks = 0;
+        video.play().catch(() => {});
+        onRecover(true);
+      }
+      return;
+    }
+
+    if (video.paused) return;
+
     const ct = video.currentTime;
     if (Math.abs(ct - lastTime) > 0.2) {
       lastTime = ct;
       ticks = 0;
+      if (aggressive && mode === 'preview') {
+        livePreviewHealthyTicks += 1;
+        if (livePreviewHealthyTicks >= 4) {
+          livePreviewHealthyTicks = 0;
+          livePreviewRecoverCount = 0;
+        }
+      }
       return;
     }
+    if (aggressive && mode === 'preview') livePreviewHealthyTicks = 0;
     ticks += 1;
     if (ticks < stallTicks) return;
     ticks = 0;
     const hls = getHls();
     if (hls) nudgeLiveHlsToEdge(hls, video);
+    else video.play().catch(() => {});
     onRecover(!!hls);
   }, intervalMs);
 
@@ -2177,30 +2274,73 @@ function recoverLivePreview(soft = false) {
   const ch = allChannels.find((c) => String(c.id) === String(selectedLiveChannelId));
   if (!ch || !$('#page-live')?.classList.contains('active') || isLivePlayerModalOpen()) return;
   const previewVideo = $('#live-preview-video');
-  if (!livePreviewHls && prefersNativeHls(previewVideo)) return;
-  if (Date.now() < livePreviewGraceUntil) {
+
+  if (isObsLowLatencyStream(ch)) {
+    if (livePreviewHls) livePreviewHls.startLoad(-1);
+    previewVideo?.play?.().catch(() => {});
+    return;
+  }
+
+  const aggressive = needsAggressiveLiveRecovery(ch);
+
+  if (!livePreviewHls && prefersNativeHls(previewVideo)) {
+    if (!aggressive) return;
+    if (soft) {
+      previewVideo.play().catch(() => {});
+      return;
+    }
+    livePreviewRecoverCount += 1;
+    healSportsStreamIfNeeded(ch);
+    scheduleLivePreview(ch, 600, { bustCache: true });
+    return;
+  }
+
+  if (Date.now() < livePreviewGraceUntil && !aggressive) {
     if (livePreviewHls) nudgeLiveHlsToEdge(livePreviewHls, $('#live-preview-video'));
     return;
   }
   if (soft && livePreviewHls) {
-    nudgeLiveHlsToEdge(livePreviewHls, $('#live-preview-video'));
+    nudgeLiveHlsToEdge(livePreviewHls, previewVideo);
+    previewVideo.play().catch(() => {});
+    if (aggressive) {
+      livePreviewRecoverCount += 1;
+      if (livePreviewRecoverCount >= 2) {
+        healSportsStreamIfNeeded(ch);
+        scheduleLivePreview(ch, 500, { bustCache: true });
+      }
+    }
     return;
   }
   livePreviewRecoverCount += 1;
-  if (livePreviewRecoverCount > 2) return;
-  scheduleLivePreview(ch, 400);
+  const maxRecover = aggressive ? 24 : 2;
+  if (livePreviewRecoverCount > maxRecover) return;
+  previewVideo?.play?.().catch(() => {});
+  if (aggressive && livePreviewRecoverCount > 1) healSportsStreamIfNeeded(ch);
+  const delay = aggressive ? Math.min(6000, 400 + livePreviewRecoverCount * 350) : 500;
+  scheduleLivePreview(ch, delay, { bustCache: aggressive && livePreviewRecoverCount > 1 });
 }
 
 function recoverLivePlayer(soft = false) {
   const ch = allChannels.find((c) => String(c.id) === String(selectedLiveChannelId));
   if (!ch || !playerLiveMode || playerClosing) return;
   const modalVideo = $('#video-player');
-  if (!hlsInstance && prefersNativeHls(modalVideo)) return;
-  if (soft && hlsInstance) {
-    nudgeLiveHlsToEdge(hlsInstance, $('#video-player'));
+  if (isObsLowLatencyStream(ch)) {
+    if (hlsInstance) hlsInstance.startLoad(-1);
+    modalVideo?.play?.().catch(() => {});
     return;
   }
-  playLive(ch.id, ch.stream_url, ch.name, ch.logo);
+  if (!hlsInstance && prefersNativeHls(modalVideo)) return;
+  if (soft && hlsInstance) {
+    nudgeLiveHlsToEdge(hlsInstance, modalVideo);
+    modalVideo.play().catch(() => {});
+    if (needsAggressiveLiveRecovery(ch)) {
+      healSportsStreamIfNeeded(ch);
+      playLive(ch.id, livePlayUrl(ch, ch.stream_url, { bustCache: true }), ch.name, ch.logo);
+    }
+    return;
+  }
+  if (needsAggressiveLiveRecovery(ch)) healSportsStreamIfNeeded(ch);
+  playLive(ch.id, livePlayUrl(ch, ch.stream_url, { bustCache: needsAggressiveLiveRecovery(ch) }), ch.name, ch.logo);
 }
 
 function stopLivePreview({ keepHls = false, bumpGen = true } = {}) {
@@ -2227,6 +2367,46 @@ function stopLivePreview({ keepHls = false, bumpGen = true } = {}) {
   if (liveClockTimer) {
     clearInterval(liveClockTimer);
     liveClockTimer = null;
+  }
+  syncLiveRadioVisualizer(null, { scope: 'preview' });
+}
+
+function isRadioChannel(ch) {
+  if (!ch) return false;
+  if (ch.radio) return true;
+  return String(ch.group_title || '').trim() === 'Radio Ecuador';
+}
+
+function syncLiveRadioVisualizer(channel, { scope = 'preview' } = {}) {
+  const isRadio = isRadioChannel(channel);
+  const show = isRadio && !!channel;
+
+  if (scope === 'preview' || scope === 'both') {
+    $('#live-hero-player')?.classList.toggle('is-radio', show);
+    const viz = $('#live-radio-visualizer');
+    viz?.classList.toggle('hidden', !show);
+    viz?.setAttribute('aria-hidden', show ? 'false' : 'true');
+    const label = $('#live-radio-label');
+    if (label) label.textContent = show ? (channel.name || '') : '';
+    const logo = $('#live-radio-logo');
+    if (logo) {
+      const chLogo = show && channel.logo ? posterUrl(channel.logo) : '';
+      logo.src = chLogo || '/icons/icon-192.svg';
+    }
+  }
+
+  if (scope === 'player' || scope === 'both') {
+    $('#player-video-wrap')?.classList.toggle('is-radio', show);
+    const viz = $('#player-radio-visualizer');
+    viz?.classList.toggle('hidden', !show);
+    viz?.setAttribute('aria-hidden', show ? 'false' : 'true');
+    const label = $('#player-radio-label');
+    if (label) label.textContent = show ? (channel.name || '') : '';
+    const logo = $('#player-radio-logo');
+    if (logo) {
+      const chLogo = show && channel.logo ? posterUrl(channel.logo) : '';
+      logo.src = chLogo || '/icons/icon-192.svg';
+    }
   }
 }
 
@@ -2280,10 +2460,15 @@ function handoffPreviewToModal(modalVideo, playUrl) {
   playerCurrentPath = playUrl;
 
   if (hlsInstance) {
+    const handoffCh = allChannels.find((c) => String(c.id) === String(selectedLiveChannelId));
+    const handoffAggressive = needsAggressiveLiveRecovery(handoffCh);
     startLiveStallWatchdog(modalVideo, {
       mode: 'player',
+      aggressive: handoffAggressive,
       isActive: () => playerLiveMode && !playerClosing && !$('#player-modal')?.classList.contains('hidden'),
       getHls: () => hlsInstance,
+      intervalMs: handoffAggressive ? 1500 : 2000,
+      stallTicks: handoffAggressive ? 3 : 5,
       onRecover: (soft) => recoverLivePlayer(soft)
     });
   }
@@ -2312,10 +2497,15 @@ function handoffModalToPreview() {
     previewVideo.muted = livePreviewMuted;
     syncLiveMuteUi(previewVideo, $('#live-preview-mute'), livePreviewMuted);
     previewVideo.play().catch(() => {});
+    const handoffCh = allChannels.find((c) => String(c.id) === String(selectedLiveChannelId));
+    const handoffAggressive = needsAggressiveLiveRecovery(handoffCh);
     startLiveStallWatchdog(previewVideo, {
       mode: 'preview',
+      aggressive: handoffAggressive,
       isActive: () => $('#page-live')?.classList.contains('active') && !isLivePlayerModalOpen(),
       getHls: () => livePreviewHls,
+      intervalMs: handoffAggressive ? 1500 : 2000,
+      stallTicks: handoffAggressive ? 3 : 5,
       onRecover: (soft) => recoverLivePreview(soft)
     });
     return true;
@@ -2326,7 +2516,7 @@ function handoffModalToPreview() {
     if (modalVideo.currentTime > 0 && !isAppleMobile()) previewVideo.currentTime = modalVideo.currentTime;
     attachNativeLiveHandlers(previewVideo, () => {
       const ch = allChannels.find((c) => String(c.id) === String(selectedLiveChannelId));
-      return ch ? livePlayUrl(ch.id, ch.stream_url) : modalVideo.src;
+      return ch ? livePlayUrl(ch, ch.stream_url) : modalVideo.src;
     });
     clearNativeLiveHandlers(modalVideo);
     previewVideo.volume = vol;
@@ -2343,36 +2533,69 @@ function hideLivePreviewPlaceholder() {
   $('#live-hero-placeholder')?.classList.add('hidden');
 }
 
-async function startLivePreview(channel, { autoStart = false } = {}) {
+async function startLivePreview(channel, { autoStart = false, bustCache = false } = {}) {
   const video = $('#live-preview-video');
   if (!video || !channel) return;
   cancelScheduledLivePreview();
   stopLivePreview({ keepHls: false, bumpGen: false });
   livePreviewRecoverCount = 0;
+  livePreviewHealthyTicks = 0;
 
-  const url = livePlayUrl(channel.id, channel.stream_url);
-  await warmLiveManifest(url);
+  syncLiveRadioVisualizer(channel, { scope: 'preview' });
+
+  const url = livePlayUrl(channel, channel.stream_url, { bustCache });
+  await warmLiveManifest(url, channel);
   if (String(selectedLiveChannelId) !== String(channel.id)) return;
 
   hideLivePreviewPlaceholder();
 
+  if (isRadioChannel(channel)) {
+    liveHlsOwner = null;
+    livePreviewHls = null;
+    syncLivePreviewAudio(video);
+    attachNativeLiveHandlers(video, () => url);
+    video.playsInline = true;
+    video.setAttribute('playsinline', '');
+    video.setAttribute('webkit-playsinline', '');
+    video.src = absoluteMediaUrl(url);
+    video.load();
+    await video.play().then(() => {
+      syncLivePreviewAudio(video);
+      sendActivityHeartbeat();
+    }).catch(() => {});
+    return;
+  }
+
   syncLivePreviewAudio(video);
+
+  const obsStream = isObsLowLatencyStream(channel);
 
   if (typeof Hls !== 'undefined' && Hls.isSupported()) {
     liveHlsOwner = 'preview';
-    livePreviewHls = new Hls(createHlsConfig(true, { preview: false }));
+    livePreviewHls = new Hls(createHlsConfig(true, {
+      preview: false,
+      playbackReferer: channel.playback_referer || ''
+    }));
     const onWaiting = () => {
+      if (obsStream) {
+        video.play().catch(() => {});
+        return;
+      }
       if (livePreviewHls) nudgeLiveHlsToEdge(livePreviewHls, video);
     };
     video.onwaiting = onWaiting;
     video.onstalled = onWaiting;
-    attachLiveHlsHandlers(livePreviewHls, video, { preview: false, autoplay: true });
+    attachLiveHlsHandlers(livePreviewHls, video, {
+      preview: false,
+      autoplay: true,
+      channel
+    });
 
     let started = false;
     const kickPlay = () => {
       if (started || String(selectedLiveChannelId) !== String(channel.id)) return;
       started = true;
-      applyLiveMaxQuality(livePreviewHls);
+      if (!obsStream) applyLiveMaxQuality(livePreviewHls);
       video.play().then(() => {
         syncLivePreviewAudio(video);
         sendActivityHeartbeat();
@@ -2385,6 +2608,21 @@ async function startLivePreview(channel, { autoStart = false } = {}) {
     livePreviewHls.attachMedia(video);
     syncLivePreviewAudio(video);
     setTimeout(kickPlay, 1200);
+
+    if (!obsStream) {
+      const relayOrSports = needsAggressiveLiveRecovery(channel);
+      startLiveStallWatchdog(video, {
+        mode: 'preview',
+        aggressive: relayOrSports,
+        isActive: () => $('#page-live')?.classList.contains('active')
+          && !isLivePlayerModalOpen()
+          && String(selectedLiveChannelId) === String(channel.id),
+        getHls: () => livePreviewHls,
+        intervalMs: relayOrSports ? 1500 : 2000,
+        stallTicks: relayOrSports ? 3 : 5,
+        onRecover: (soft) => recoverLivePreview(soft)
+      });
+    }
   } else if (prefersNativeHls(video)) {
     await playNativeLiveVideo(video, url);
   }
@@ -2395,22 +2633,52 @@ function isSportsLiveChannel(ch) {
   return g.includes('deporte') || g.includes('sport');
 }
 
-function pickAutoPreviewCandidates(list) {
-  const pool = list.filter((c) =>
-    !isAnimeChannel(c) && !isSlowLiveChannel(c) && !isSportsLiveChannel(c));
-  if (pool.length) return pool;
-  const fallback = list.filter((c) => !isAnimeChannel(c) && !isSportsLiveChannel(c));
-  return fallback.length ? fallback : list.filter((c) => !isAnimeChannel(c));
+function needsAggressiveLiveRecovery(ch) {
+  if (isDirectLiveChannel(ch) || isObsLowLatencyStream(ch)) return false;
+  return isSportsLiveChannel(ch);
 }
 
-function pickRandomLiveChannel(list) {
-  const pool = pickAutoPreviewCandidates(list);
+function isRelayLiveChannel(ch) {
+  if (!ch) return false;
+  return ch.catchup === 1 || ch.catchup === true
+    || /^\/cache\/live\//i.test(String(ch.stream_url || ''));
+}
+
+function relayPlayUrl(ch, { bust = false } = {}) {
+  const base = (ch?.stream_url && String(ch.stream_url).startsWith('/cache/'))
+    ? ch.stream_url
+    : `/cache/live/${ch.id}/index.m3u8`;
+  if (!bust) return base;
+  return `${base}${base.includes('?') ? '&' : '?'}_=${Date.now()}`;
+}
+
+async function healSportsStreamIfNeeded(ch) {
+  if (!ch?.id || !isSportsLiveChannel(ch)) return;
+  try {
+    await api(`/live/ch/${ch.id}/relay-heal`, { method: 'POST', timeoutMs: 20000 });
+  } catch { /* ignore */ }
+}
+
+function pickAutoPreviewCandidates(list, { onlyFeatured = false } = {}) {
+  const eligible = (c) => {
+    if (isAnimeChannel(c) || isRadioChannel(c)) return false;
+    if (onlyFeatured) return isAllowedRandomLiveChannel(c);
+    return true;
+  };
+  const pool = list.filter((c) => eligible(c) && !isSlowLiveChannel(c));
+  if (pool.length) return pool;
+  const fallback = list.filter(eligible);
+  return fallback.length ? fallback : [];
+}
+
+function pickRandomLiveChannel(list, { onlyFeatured = false } = {}) {
+  const pool = pickAutoPreviewCandidates(list, { onlyFeatured });
   if (!pool.length) return null;
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
 async function startFeaturedLivePreview() {
-  const pool = pickAutoPreviewCandidates(allChannels);
+  const pool = pickAutoPreviewCandidates(allChannels, { onlyFeatured: true });
   if (!pool.length) return;
 
   const tries = [...pool].sort(() => Math.random() - 0.5);
@@ -2478,6 +2746,10 @@ function clearLiveHeroFullscreenState() {
 
 async function exitLiveHeroFullscreen() {
   clearLiveHeroFullscreenState();
+  if (prefersCssFullscreen()) {
+    syncLiveFullscreenUi();
+    return;
+  }
   try {
     if (documentFullscreenElement()) {
       if (document.exitFullscreen) await document.exitFullscreen();
@@ -2485,6 +2757,10 @@ async function exitLiveHeroFullscreen() {
     }
   } catch (_) { /* ignore */ }
   syncLiveFullscreenUi();
+}
+
+function prefersCssFullscreen() {
+  return VIX_PLATFORM === 'tv' || isVixNativeApp();
 }
 
 async function enterLiveHeroFullscreen() {
@@ -2500,6 +2776,8 @@ async function enterLiveHeroFullscreen() {
   $('#page-live')?.classList.add('live-hero-fullscreen-active');
   document.body.classList.add('live-page-fullscreen');
   syncLiveFullscreenUi();
+
+  if (prefersCssFullscreen()) return;
 
   try {
     if (target.requestFullscreen) await target.requestFullscreen();
@@ -2570,7 +2848,7 @@ function selectLiveChannel(channel, { preview = true, openFull = false, forcePre
 function bindLiveGuide(container) {
   container.querySelectorAll('.live-epg-row').forEach((row) => {
     row.addEventListener('pointerdown', () => {
-      warmLiveManifest(livePlayUrl(row.dataset.id, decodeURIComponent(row.dataset.url || '')));
+      warmLiveManifest(livePlayUrl(row.dataset.id, decodeURIComponent(row.dataset.url || '')), row.dataset.id);
     }, { passive: true });
     row.addEventListener('click', () => {
       const channel = allChannels.find((c) => String(c.id) === String(row.dataset.id));
@@ -2595,20 +2873,18 @@ function isMovieChannel(ch) {
   return LIVE_MOVIE_RE.test(hay);
 }
 
-const DEPORTES_CHANNEL_ORDER = [
-  'dsports', 'win sports', 'tyc sports', 'fox deportes',
-  'espn premium', 'espn deportes', 'dsports 2', 'claro sports', 'bein sports'
-];
+const DEPORTES_CHANNEL_ORDER = [];
 
 function liveChannelSortKey(ch) {
+  const o = Number(ch?.order);
+  if (Number.isFinite(o) && o > 0) return o;
   const g = String(ch?.group_title || '').trim();
   if (/^deportes$/i.test(g)) {
     const n = String(ch?.name || '').toLowerCase().replace(/\s+/g, ' ').trim();
     const idx = DEPORTES_CHANNEL_ORDER.findIndex((needle) => n === needle);
-    if (idx >= 0) return idx;
+    if (idx >= 0) return idx + 1;
   }
-  const o = Number(ch?.order);
-  return Number.isFinite(o) && o > 0 ? o + 100 : 9999;
+  return 9999;
 }
 
 function sortLiveChannels(list) {
@@ -2633,22 +2909,9 @@ function isSlowLiveChannel(ch) {
 }
 
 function pickFeaturedLiveChannel(list) {
-  const ecuador = list.filter((c) => /^ecuador$/i.test(c.group_title || '') && !isAnimeChannel(c));
-  const pluto = list.filter((c) => String(c.group_title || '').startsWith('Pluto TV ·'));
-  const vix = list.filter(isLiveVixSidebarChannel);
-  const pool = [...ecuador, ...pluto, ...vix];
-  const fast = list.filter((c) => !isSlowLiveChannel(c) && !isAnimeChannel(c));
-  const rawPool = ecuador.length ? ecuador : (pool.length ? pool : fast);
-  const seen = new Set();
-  const finalPool = rawPool.filter((ch) => {
-    if (seen.has(ch.id)) return false;
-    seen.add(ch.id);
-    return true;
-  });
-  if (!finalPool.length) return list.find((c) => !isAnimeChannel(c)) || list[0] || null;
-
-  const idx = Math.floor(Math.random() * finalPool.length);
-  return finalPool[idx];
+  const pool = list.filter((c) => isAllowedRandomLiveChannel(c) && !isSlowLiveChannel(c));
+  if (!pool.length) return null;
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 function cancelScheduledLivePreview() {
@@ -2658,7 +2921,7 @@ function cancelScheduledLivePreview() {
   }
 }
 
-function scheduleLivePreview(channel, delayMs = 80) {
+function scheduleLivePreview(channel, delayMs = 80, opts = {}) {
   cancelScheduledLivePreview();
   if (!channel) return;
   const gen = ++livePreviewGen;
@@ -2667,7 +2930,7 @@ function scheduleLivePreview(channel, delayMs = 80) {
     if (gen !== livePreviewGen) return;
     if (String(selectedLiveChannelId) !== String(channel.id)) return;
     if (!$('#page-live')?.classList.contains('active') || isLivePlayerModalOpen()) return;
-    startLivePreview(channel, { autoStart: false });
+    startLivePreview(channel, { autoStart: false, bustCache: !!opts.bustCache });
   }, delayMs);
 }
 
@@ -2800,6 +3063,8 @@ if (!window.__livePageVisibilityBound) {
     if (document.visibilityState !== 'visible') return;
     if (!$('#page-live')?.classList.contains('active')) return;
     refreshLiveChannelsList().catch(() => {});
+    const ch = allChannels.find((c) => String(c.id) === String(selectedLiveChannelId));
+    if (!needsAggressiveLiveRecovery(ch)) return;
     if (isLivePlayerModalOpen()) recoverLivePlayer(true);
     else recoverLivePreview(true);
   });
@@ -2815,6 +3080,13 @@ const LIVE_SIDEBAR_ORDER = [
   'Noticias',
   'Deportes'
 ];
+
+/** Países al final del menú En Vivo (desactivados — sync IPTV pesado). */
+const LIVE_COUNTRY_ORDER = [];
+
+function isLiveCountryCategory(name) {
+  return false;
+}
 
 function liveCategoryLabel(name) {
   return String(name || '')
@@ -2834,6 +3106,20 @@ function isLiveFreeTvChannel(ch) {
 
 function isLivePlutoChannel(ch) {
   return String(ch?.group_title || '').startsWith('Pluto TV ·');
+}
+
+/** Canales elegibles al abrir En Vivo al azar (sin países importados). */
+function isAllowedRandomLiveChannel(ch) {
+  if (!ch || isAnimeChannel(ch) || isRadioChannel(ch)) return false;
+  if (isLiveCountryCategory(ch.group_title)) return false;
+  const g = String(ch.group_title || '').trim();
+  if (/^ecuador$/i.test(g)) return true;
+  if (/^deportes$/i.test(g)) return true;
+  if (/^pel[ií]culas$/i.test(g) || /^cine(\s|$|-)/i.test(g)) return true;
+  if (isLivePlutoChannel(ch)) return true;
+  if (isLiveVixSidebarChannel(ch)) return true;
+  if (isLiveFreeTvChannel(ch)) return true;
+  return false;
 }
 
 function isLiveMusicaChannel(ch) {
@@ -2897,9 +3183,11 @@ function liveCategoryMenuKeys(counts) {
   }
 
   const extras = Object.keys(counts)
-    .filter((k) => !k.startsWith('__') && !used.has(k) && counts[k] > 0 && !k.startsWith('Pluto TV ·'))
+    .filter((k) => !k.startsWith('__') && !used.has(k) && counts[k] > 0 && !k.startsWith('Pluto TV ·') && !isLiveCountryCategory(k))
     .sort((a, b) => a.localeCompare(b, 'es'));
   extras.forEach((k) => add(k));
+
+  LIVE_COUNTRY_ORDER.forEach((k) => add(k));
   return keys;
 }
 
@@ -2912,9 +3200,10 @@ function renderLiveCategoryFilters() {
 
   const counts = countLiveSidebarCategories();
   const menuKeys = liveCategoryMenuKeys(counts);
+  const destacadoCount = allChannels.filter((c) => !isLiveCountryCategory(c.group_title)).length;
 
   const sidebarItems = menuKeys.map((key) => makeChip(key, liveCategoryChipLabel(key), null, true));
-  const scrollItems = [makeChip('all', 'Destacado', allChannels.length)];
+  const scrollItems = [makeChip('all', 'Destacado', destacadoCount)];
   menuKeys.forEach((key) => {
     scrollItems.push(makeChip(key, liveCategoryChipLabel(key), counts[key]));
   });
@@ -2963,6 +3252,7 @@ function renderLiveGuide() {
   else if (currentGroup === 'Música') filtered = filtered.filter(isLiveMusicaChannel);
   else if (currentGroup === 'Noticias') filtered = filtered.filter(isLiveNoticiasChannel);
   else if (currentGroup === 'Ecuador') filtered = filtered.filter((c) => /^ecuador$/i.test(String(c.group_title || '')));
+  else if (currentGroup === 'all') filtered = filtered.filter((c) => !isLiveCountryCategory(c.group_title));
   else if (currentGroup !== 'all') filtered = filtered.filter((c) => String(c.group_title || '').trim() === currentGroup);
   if (search) filtered = filtered.filter((c) => c.name.toLowerCase().includes(search));
 
@@ -2981,15 +3271,24 @@ function renderLiveGuide() {
   const selected = sorted.find((c) => String(c.id) === String(selectedLiveChannelId));
   let next;
   let autoPreview = true;
+  const onlyFeatured = !search && currentGroup === 'all';
   if (selected) {
     next = selected;
   } else if (!search && currentGroup === 'all' && !liveInitialChannelPicked) {
     liveInitialChannelPicked = true;
-    next = pickRandomLiveChannel(sorted) || sorted.find((c) => !isAnimeChannel(c)) || sorted[0];
+    next = pickRandomLiveChannel(sorted, { onlyFeatured: true })
+      || sorted.find((c) => isAllowedRandomLiveChannel(c))
+      || sorted.find((c) => !isAnimeChannel(c) && !isLiveCountryCategory(c.group_title))
+      || null;
+    if (!next) return;
     selectLiveChannel(next, { preview: false, openFull: false });
     return;
   } else {
-    next = pickRandomLiveChannel(sorted) || sorted.find((c) => !isAnimeChannel(c)) || sorted[0];
+    next = pickRandomLiveChannel(sorted, { onlyFeatured })
+      || (onlyFeatured
+        ? sorted.find((c) => isAllowedRandomLiveChannel(c))
+        : sorted.find((c) => !isAnimeChannel(c)))
+      || sorted[0];
   }
   selectLiveChannel(next, { preview: autoPreview, openFull: false });
 }
@@ -3011,7 +3310,94 @@ function tickLiveClock() {
   if (playerLive && playerLiveMode) playerLive.textContent = now;
 }
 
-function livePlayUrl(channelId, fallbackUrl) {
+function resolveLiveChannel(channelOrId, fallbackUrl) {
+  if (channelOrId && typeof channelOrId === 'object') return channelOrId;
+  return allChannels.find((c) => String(c.id) === String(channelOrId))
+    || (fallbackUrl ? { id: channelOrId, stream_url: fallbackUrl } : null);
+}
+
+function isDirectLiveChannel(ch) {
+  return !!ch?.direct_source || isObsLowLatencyStream(ch);
+}
+
+function isObsLowLatencyStream(ch) {
+  const u = String(ch?.stream_url || '');
+  return /vixred\.com\/hls\/[^/?#]+\.m3u8/i.test(u)
+    || /181\.78\.245\.90\/hls\/[^/?#]+\.m3u8/i.test(u)
+    || /5\.5\.5\.4\/hls\/[^/?#]+\.m3u8/i.test(u)
+    || /^\/hls\/[^/?#]+\.m3u8/i.test(u);
+}
+
+function obsHlsLocalPath(url = '') {
+  const m = String(url || '').match(/\/hls\/([^/?#]+\.m3u8)/i);
+  return m ? `/hls/${m[1]}` : '';
+}
+
+function obsStreamNeedsProxy(ch, url = '') {
+  const u = String(url || ch?.stream_url || '');
+  const local = obsHlsLocalPath(u);
+  if (local) return false;
+  if (/^\/hls\//i.test(u)) return false;
+  if (/181\.78\.245\.90\/hls\//i.test(u)) return false;
+  if (/5\.5\.5\.4\/hls\//i.test(u)) return false;
+  if (/vixred\.com\/hls\//i.test(u)) return true;
+  return directLiveNeedsProxy(ch, u);
+}
+
+function directLiveNeedsProxy(ch, url = '') {
+  const u = String(url || ch?.stream_url || '');
+  return !!ch?.playback_referer
+    || /fubo18\.com|ksdjugfsddeports\.com/i.test(u);
+}
+
+function liveDirectPlaybackOrigin(referer = '') {
+  if (!referer) return '';
+  try { return new URL(referer).origin; } catch { return ''; }
+}
+
+function liveProxiedStreamUrl(ch, fallbackUrl = '') {
+  const upstream = ch?.stream_url || fallbackUrl || '';
+  if (!/^https?:\/\//i.test(upstream)) return upstream;
+  const ref = ch?.playback_referer || '';
+  const origin = liveDirectPlaybackOrigin(ref);
+  return proxyStreamUrl(upstream, ref, {}, origin);
+}
+
+function livePlayUrl(channelOrId, fallbackUrl, opts = {}) {
+  const ch = resolveLiveChannel(channelOrId, fallbackUrl);
+  if (opts.forceProxy && ch) return liveProxiedStreamUrl(ch, fallbackUrl);
+  if (isRadioChannel(ch)) {
+    const upstream = ch?.stream_url || fallbackUrl || '';
+    if (/^https?:\/\//i.test(upstream)) return proxyStreamUrl(upstream);
+  }
+  if (isDirectLiveChannel(ch)) {
+    const upstream = ch?.stream_url || fallbackUrl || '';
+    if (!upstream) return upstream;
+    const channelId = ch?.id ?? channelOrId;
+    const obsLocal = obsHlsLocalPath(upstream);
+    if (channelId && token && (obsLocal || upstream.startsWith('/hls/'))) {
+      const q = `token=${encodeURIComponent(token)}&sid=${encodeURIComponent(getClientSessionKey())}`;
+      return `/api/live/ch/${channelId}/play.m3u8?${q}`;
+    }
+    if (obsLocal) return obsLocal;
+    if (upstream.startsWith('/')) return upstream;
+    if (!/^https?:\/\//i.test(upstream)) return upstream;
+    if (obsStreamNeedsProxy(ch, upstream)) {
+      return proxyStreamUrl(upstream, '', {
+        content_type: 'live',
+        content_id: ch?.id,
+        title: ch?.name || 'En vivo'
+      });
+    }
+    return upstream;
+  }
+  if (isRelayLiveChannel(ch)) {
+    return relayPlayUrl(ch, { bust: !!opts.bustCache });
+  }
+  if (/ksdjugfsddeports\.com/i.test(ch?.stream_url || '') && ch?.playback_referer) {
+    return ch.stream_url;
+  }
+  const channelId = ch?.id ?? channelOrId;
   if (channelId) {
     const q = `token=${encodeURIComponent(token)}&sid=${encodeURIComponent(getClientSessionKey())}`;
     return `/api/live/ch/${channelId}/play.m3u8?${q}`;
@@ -3117,7 +3503,7 @@ async function ensureTcStreamReady(ch) {
   if (!token) throw new Error('Inicia sesión para ver TC Televisión');
 
   const now = Date.now();
-  const playUrl = () => livePlayUrl(ch.id, ch.stream_url);
+  const playUrl = () => livePlayUrl(ch, ch.stream_url);
 
   if (
     tcResolvedCache.channelId === ch.id
@@ -3141,8 +3527,13 @@ async function ensureTcStreamReady(ch) {
   throw new Error('No se pudo conectar TC Televisión. Intenta de nuevo en unos segundos.');
 }
 
-async function warmLiveManifest(url) {
-  if (!url || !token) return false;
+async function warmLiveManifest(url, channelOrId) {
+  if (!url) return false;
+  const ch = resolveLiveChannel(channelOrId);
+  if (isRadioChannel(ch) || isDirectLiveChannel(ch) || (/ksdjugfsddeports\.com/i.test(ch?.stream_url || '') && ch?.playback_referer)) {
+    return true;
+  }
+  if (!token) return false;
   try {
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
@@ -3163,12 +3554,23 @@ function applyLiveMaxQuality(hls) {
 }
 
 function createHlsConfig(live, opts = {}) {
-  const { preview = false, tcReferer = TC_REFERER } = opts;
+  const { preview = false, tcReferer = TC_REFERER, playbackReferer = '' } = opts;
+  const liveCh = live ? resolveLiveChannel(selectedLiveChannelId) : null;
+  const obsLive = live && isObsLowLatencyStream(liveCh);
+  const directReferer = playbackReferer
+    || liveCh?.playback_referer
+    || '';
+  const directOrigin = liveDirectPlaybackOrigin(directReferer);
   const xhrSetup = (xhr, url) => {
     if (url.includes('/api/live/')) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     if (/dmcdn\.net|dailymotion\.com/i.test(url)) {
       xhr.setRequestHeader('Referer', tcReferer);
       xhr.setRequestHeader('Origin', TC_EMBEDDER_URL);
+      return;
+    }
+    if (directReferer && !url.includes('/api/live/')) {
+      xhr.setRequestHeader('Referer', directReferer);
+      if (directOrigin) xhr.setRequestHeader('Origin', directOrigin);
     }
   };
   if (!live) {
@@ -3188,34 +3590,35 @@ function createHlsConfig(live, opts = {}) {
     xhrSetup,
     lowLatencyMode: false,
     liveBackBufferLength: 0,
-    maxLiveSyncPlaybackRate: 1.25,
-    backBufferLength: preview ? 12 : 30,
-    maxBufferLength: preview ? 18 : 30,
-    maxMaxBufferLength: preview ? 36 : 60,
-    maxBufferSize: preview ? 28 * 1000 * 1000 : 60 * 1000 * 1000,
-    maxBufferHole: 0.5,
+    maxLiveSyncPlaybackRate: obsLive ? 1.05 : 1.25,
+    backBufferLength: obsLive ? 6 : (preview ? 12 : 30),
+    maxBufferLength: obsLive ? 30 : (preview ? 18 : 30),
+    maxMaxBufferLength: obsLive ? 60 : (preview ? 36 : 60),
+    maxBufferSize: obsLive ? 48 * 1000 * 1000 : (preview ? 28 * 1000 * 1000 : 60 * 1000 * 1000),
+    maxBufferHole: obsLive ? 1.0 : 0.5,
     startLevel: -1,
-    testBandwidth: !preview,
+    testBandwidth: !preview && !obsLive,
     abrEwmaDefaultEstimate: preview ? 2500000 : 8000000,
     abrBandWidthFactor: 0.95,
     abrBandWidthUpFactor: preview ? 0.85 : 0.95,
     capLevelToPlayerSize: false,
     startFragPrefetch: true,
     initialLiveManifestSize: 1,
-    liveSyncDurationCount: 3,
-    liveMaxLatencyDurationCount: 10,
-    manifestLoadingTimeOut: 12000,
-    levelLoadingTimeOut: 12000,
-    fragLoadingTimeOut: 15000,
-    manifestLoadingMaxRetry: 4,
-    levelLoadingMaxRetry: 4,
-    fragLoadingMaxRetry: 6
+    liveSyncDurationCount: obsLive ? 4 : 3,
+    liveMaxLatencyDurationCount: obsLive ? 12 : 10,
+    manifestLoadingTimeOut: obsLive ? 10000 : 12000,
+    levelLoadingTimeOut: obsLive ? 10000 : 12000,
+    fragLoadingTimeOut: obsLive ? 12000 : 15000,
+    manifestLoadingMaxRetry: obsLive ? 8 : 4,
+    levelLoadingMaxRetry: obsLive ? 8 : 4,
+    fragLoadingMaxRetry: obsLive ? 10 : 6
   };
 }
 
-function proxyStreamUrl(url, referer = '', watch = {}) {
+function proxyStreamUrl(url, referer = '', watch = {}, origin = '') {
   let q = `url=${encodeURIComponent(url)}&token=${encodeURIComponent(token)}&sid=${encodeURIComponent(getClientSessionKey())}`;
   if (referer) q += `&referer=${encodeURIComponent(referer)}`;
+  if (origin) q += `&origin=${encodeURIComponent(origin)}`;
   if (watch.title) q += `&watch_title=${encodeURIComponent(String(watch.title).slice(0, 160))}`;
   if (watch.content_type) q += `&watch_type=${encodeURIComponent(watch.content_type)}`;
   if (watch.status) q += `&watch_status=${encodeURIComponent(watch.status)}`;
@@ -3607,7 +4010,10 @@ async function finishAppBoot() {
   startActivityHeartbeat();
   window.addEventListener('pagehide', sendActivityOffline);
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') sendActivityHeartbeat();
+    if (document.visibilityState === 'visible') {
+      sendActivityHeartbeat();
+      checkNativeAppUpdate();
+    }
   });
   restoreRouteFromHash().catch(() => navigateToPage(defaultPageForUser(), { replaceRoute: true }));
   if (isTvMode()) requestAnimationFrame(() => focusTvScreenStart());
@@ -3632,8 +4038,8 @@ function isUpdateForThisApp(info, platform) {
 
 async function checkNativeAppUpdate() {
   if (!isVixNativeApp()) return;
-  /* iOS/Capacitor: la app carga la web del servidor; no usa APK ni banner de Android. */
-  if (isCapacitorIos() || VIX_PLATFORM === 'ios') return;
+  /* iOS/Capacitor y Windows Electron cargan la web del servidor; no usan APK. */
+  if (isCapacitorIos() || VIX_PLATFORM === 'ios' || VIX_PLATFORM === 'windows') return;
   const platform = nativeAppPlatform();
   const code = window.VIXTV_NATIVE?.versionCode
     ?? (parseInt(new URLSearchParams(location.search).get('vix_build') || '0', 10) || 1);
@@ -3691,6 +4097,142 @@ function showAppUpdateBanner(info) {
   if (VIX_PLATFORM === 'tv') {
     requestAnimationFrame(() => banner.querySelector('.vix-update-btn')?.focus());
   }
+}
+
+const MUNDIAL_REFRESH_MS = 10 * 60 * 1000;
+const MUNDIAL_TZ = 'America/Guayaquil';
+let mundialCarouselUpdatedAt = 0;
+
+function mundialBannerDayKey() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: MUNDIAL_TZ }).format(new Date());
+}
+
+async function ensureLiveChannelsForMundial() {
+  if (allChannels?.length) return;
+  try {
+    allChannels = await api('/live/channels');
+  } catch { /* ignore */ }
+}
+
+async function playMundialMatch(match) {
+  if (!match?.channel_id) return;
+  await ensureLiveChannelsForMundial();
+  const ch = allChannels.find((c) => String(c.id) === String(match.channel_id));
+  const name = ch?.name || match.channel_name || 'DSports';
+  const logo = ch?.logo || '';
+  const url = ch?.stream_url || '';
+  playLive(match.channel_id, url, name, logo);
+}
+
+function mundialMatchCard(m) {
+  const live = m.state === 'in';
+  const badge = escHtml(m.badge || m.time || m.shortStatus || '');
+  const brand = escHtml(m.channel_name || 'DSports');
+  const homeColor = escHtml(m.home?.color || '#1a3a5c');
+  const awayColor = escHtml(m.away?.color || '#0d2137');
+  const when = live
+    ? escHtml(m.time || '')
+    : [m.date_label, m.time].filter(Boolean).map((x) => escHtml(x)).join(' · ');
+  const line1 = when
+    ? `${when} · ${escHtml(m.competition || 'Copa Mundial de la FIFA 2026')}`
+    : escHtml(m.competition || 'Copa Mundial de la FIFA 2026');
+  const vs = `${escHtml(m.home?.name || 'Local')} vs. ${escHtml(m.away?.name || 'Visitante')}`;
+  return `
+    <button type="button"
+      class="vix-mundial-card tv-focusable"
+      data-channel-id="${escHtml(String(m.channel_id || ''))}"
+      data-channel-name="${escHtml(m.channel_name || 'DSports')}"
+      aria-label="Ver ${vs} en ${brand}">
+      <div class="vix-mundial-card__visual" style="--home-color:${homeColor};--away-color:${awayColor}">
+        <span class="vix-mundial-card__badge${live ? ' is-live' : ''}">${badge}</span>
+        <div class="vix-mundial-card__teams">
+          ${m.home?.logo ? `<img class="vix-mundial-card__flag" src="${escHtml(m.home.logo)}" alt="" loading="lazy">` : '<span class="vix-mundial-card__flag-ph"></span>'}
+          <span class="vix-mundial-card__wc" aria-hidden="true">🏆</span>
+          ${m.away?.logo ? `<img class="vix-mundial-card__flag" src="${escHtml(m.away.logo)}" alt="" loading="lazy">` : '<span class="vix-mundial-card__flag-ph"></span>'}
+        </div>
+        <span class="vix-mundial-card__brand">${brand}</span>
+      </div>
+      <div class="vix-mundial-card__meta">
+        <div class="vix-mundial-card__line1">${line1}</div>
+        <div class="vix-mundial-card__line2">${vs}</div>
+      </div>
+    </button>`;
+}
+
+function showWorldCupBanner(data) {
+  const mount = document.getElementById('mundial-carousel-mount');
+  if (!mount) return;
+  document.getElementById('vix-mundial-carousel')?.remove();
+  if (!data?.enabled || !data.matches?.length) return;
+
+  const section = document.createElement('section');
+  section.id = 'vix-mundial-carousel';
+  section.className = 'vix-mundial-carousel';
+  section.setAttribute('aria-label', 'Mundial FIFA 2026');
+  section.dataset.dayKey = data.day_key || mundialBannerDayKey();
+  section.dataset.updatedAt = data.updated_at || '';
+  const liveDot = data.has_live ? '<span class="vix-mundial-carousel__dot" aria-hidden="true"></span>' : '';
+  const cards = (data.matches || []).map(mundialMatchCard).join('');
+  section.innerHTML = `
+    <div class="vix-mundial-carousel__header">
+      <h2 class="vix-mundial-carousel__title">${liveDot}${escHtml(data.title || 'En vivo y próximamente')}</h2>
+    </div>
+    <div class="vix-mundial-carousel__track carousel">${cards}</div>`;
+
+  section.querySelectorAll('.vix-mundial-card').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      playMundialMatch({
+        channel_id: btn.dataset.channelId,
+        channel_name: btn.dataset.channelName
+      });
+    });
+  });
+
+  mount.appendChild(section);
+  mundialCarouselUpdatedAt = Date.now();
+  applyTvNavFocusables();
+}
+
+function mundialCarouselNeedsRefresh() {
+  const el = document.getElementById('vix-mundial-carousel');
+  if (!el) return true;
+  const dayKey = mundialBannerDayKey();
+  if (el.dataset.dayKey !== dayKey) return true;
+  if (Date.now() - mundialCarouselUpdatedAt > MUNDIAL_REFRESH_MS) return true;
+  const updatedAt = Date.parse(el.dataset.updatedAt || '');
+  if (Number.isFinite(updatedAt) && Date.now() - updatedAt > MUNDIAL_REFRESH_MS) return true;
+  return false;
+}
+
+async function ensureWorldCupCarousel({ force = false } = {}) {
+  if (!force && !mundialCarouselNeedsRefresh()) return;
+  try {
+    const data = await fetch(`${API}/worldcup/banner?_=${Date.now()}`).then((r) => (r.ok ? r.json() : null));
+    if (!data?.enabled || !data.matches?.length) {
+      document.getElementById('vix-mundial-carousel')?.remove();
+      return;
+    }
+    showWorldCupBanner(data);
+  } catch { /* sin conexión o sin partidos */ }
+}
+
+function startMundialCarouselAutoRefresh() {
+  if (window.__mundialRefreshTimer) return;
+  window.__mundialRefreshTimer = setInterval(() => {
+    if ($('#page-home')?.classList.contains('active')) {
+      ensureWorldCupCarousel().catch(() => {});
+    }
+  }, 60 * 1000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    if ($('#page-home')?.classList.contains('active')) {
+      ensureWorldCupCarousel().catch(() => {});
+    }
+  });
+}
+
+async function initWorldCupBanner() {
+  await ensureWorldCupCarousel();
 }
 
 function setLoginBusy(on, text = 'Conectando…') {
@@ -5155,6 +5697,8 @@ async function loadHome() {
     homeCatalogSections = catalog.sections || [];
     renderCatalogPage(rowsEl, homeCatalogSections);
     await continueP;
+    await ensureWorldCupCarousel({ force: true });
+    startMundialCarouselAutoRefresh();
   } catch (err) {
     toast(err.message, true);
   }
@@ -5173,7 +5717,8 @@ function initCarouselDragScroll() {
     if (e.button !== 0) return;
     const track = e.target.closest('.carousel, .catalog-row__track');
     if (!track) return;
-    if (e.target.closest('button, a, input, .library-action-btn, .card-action-btn')) return;
+    const mundialTrack = track.classList.contains('vix-mundial-carousel__track');
+    if (!mundialTrack && e.target.closest('button, a, input, .library-action-btn, .card-action-btn')) return;
     carouselDrag = {
       el: track,
       startX: e.clientX,
@@ -7619,6 +8164,7 @@ function closePlayer() {
   modal.classList.remove('player-open');
   $('#mobile-bottom-nav')?.classList.remove('hidden');
   setPlayerLiveMode(false);
+  syncLiveRadioVisualizer(null, { scope: 'player' });
   const video = $('#video-player');
   clearNativeLiveHandlers(video);
   video.onerror = null;
@@ -7816,6 +8362,11 @@ function setupVideoPlayer(video, path, durationHint = 0, startTime = 0, live = f
       video.play().catch(() => { if (!playerClosing) toast('Pulsa play para iniciar', true); });
     };
     const onWaiting = () => {
+      const liveCh = resolveLiveChannel(selectedLiveChannelId);
+      if (isLiveHls && isObsLowLatencyStream(liveCh)) {
+        video.play().catch(() => {});
+        return;
+      }
       if (isLiveHls && hlsInstance) nudgeLiveHlsToEdge(hlsInstance, video);
     };
     video.onwaiting = onWaiting;
@@ -7825,18 +8376,25 @@ function setupVideoPlayer(video, path, durationHint = 0, startTime = 0, live = f
     hlsInstance.attachMedia(video);
     if (isLiveHls) {
       liveHlsOwner = 'player';
-      attachLiveHlsHandlers(hlsInstance, video, { preview: false, autoplay: false });
+      const liveCh = resolveLiveChannel(selectedLiveChannelId);
+      attachLiveHlsHandlers(hlsInstance, video, { preview: false, autoplay: false, channel: liveCh });
       hlsInstance.on(Hls.Events.FRAG_BUFFERED, () => {
         clearPlayerLoading();
         startPlayback();
       });
       setTimeout(() => startPlayback(), 2000);
-      startLiveStallWatchdog(video, {
-        mode: 'player',
-        isActive: () => playerLiveMode && !playerClosing && !$('#player-modal')?.classList.contains('hidden'),
-        getHls: () => hlsInstance,
-        onRecover: (soft) => recoverLivePlayer(soft)
-      });
+      if (!isObsLowLatencyStream(liveCh)) {
+        const playerAggressive = needsAggressiveLiveRecovery(liveCh);
+        startLiveStallWatchdog(video, {
+          mode: 'player',
+          aggressive: playerAggressive,
+          isActive: () => playerLiveMode && !playerClosing && !$('#player-modal')?.classList.contains('hidden'),
+          getHls: () => hlsInstance,
+          intervalMs: playerAggressive ? 1500 : 2000,
+          stallTicks: playerAggressive ? 3 : 5,
+          onRecover: (soft) => recoverLivePlayer(soft)
+        });
+      }
     } else {
       hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
         if (playerClosing) return;
@@ -7920,9 +8478,11 @@ function playLive(channelId, url, name, logo) {
   if (logo) { logoEl.src = logo; logoEl.style.display = 'block'; }
   else logoEl.style.display = 'none';
 
+  const ch = allChannels.find((c) => String(c.id) === String(channelId));
+  syncLiveRadioVisualizer(ch || { id: channelId, name, logo, group_title: '' }, { scope: 'player' });
+
   const begin = async () => {
-    const ch = allChannels.find((c) => String(c.id) === String(channelId));
-    const playUrl = livePlayUrl(channelId, ch?.stream_url || url);
+    const playUrl = livePlayUrl(ch || channelId, ch?.stream_url || url);
     const modalVideo = $('#video-player');
     if (canSeamlessLiveHandoff(channelId) && modalVideo) {
       handoffPreviewToModal(modalVideo, playUrl);
@@ -7943,6 +8503,10 @@ $('#player-close').addEventListener('click', closePlayer);
 $('#player-fullscreen')?.addEventListener('click', () => {
   const modal = $('#player-modal');
   const video = $('#video-player');
+  if (prefersCssFullscreen()) {
+    modal.classList.toggle('player-fullscreen-mode');
+    return;
+  }
   if (video.requestFullscreen) {
     video.requestFullscreen().catch(() => {
       modal.classList.toggle('player-fullscreen-mode');
