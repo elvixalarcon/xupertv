@@ -789,12 +789,19 @@ final class VixPlayerController: ObservableObject {
     var onProgress: ((Double, Double) -> Void)?
 
     func play(url: URL, startAt: Double = 0) {
+        play(url: url, startAt: startAt, allowTranscodeFallback: true)
+    }
+
+    private func play(url: URL, startAt: Double, allowTranscodeFallback: Bool) {
         stop()
         let token = AuthSession.shared.api.token
         var headers: [String: String] = [:]
         let path = url.absoluteString
         if path.contains("/api/live/") && !path.contains("token="), !token.isEmpty {
             headers["Authorization"] = "Bearer \(token)"
+        }
+        if path.contains("/api/stream/") {
+            headers["Accept"] = "*/*"
         }
         let item: AVPlayerItem
         if !headers.isEmpty {
@@ -821,15 +828,29 @@ final class VixPlayerController: ObservableObject {
             }
         }
 
-        if item.status == .readyToPlay {
-            startPlayback()
-        } else {
-            readyObserver = item.observe(\.status, options: [.new]) { observed, _ in
-                guard observed.status == .readyToPlay else { return }
+        readyObserver = item.observe(\.status, options: [.new]) { [weak self] observed, _ in
+            guard let self else { return }
+            if observed.status == .readyToPlay {
                 self.readyObserver?.invalidate()
                 self.readyObserver = nil
                 startPlayback()
+            } else if observed.status == .failed, allowTranscodeFallback, path.contains("/api/stream/") {
+                guard var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
+                var query = parts.queryItems ?? []
+                if query.contains(where: { $0.name == "transcode" }) { return }
+                query.append(URLQueryItem(name: "transcode", value: "1"))
+                parts.queryItems = query
+                guard let retry = parts.url else { return }
+                DispatchQueue.main.async {
+                    self.play(url: retry, startAt: 0, allowTranscodeFallback: false)
+                }
             }
+        }
+
+        if item.status == .readyToPlay {
+            readyObserver?.invalidate()
+            readyObserver = nil
+            startPlayback()
         }
 
         observer = NotificationCenter.default.addObserver(
