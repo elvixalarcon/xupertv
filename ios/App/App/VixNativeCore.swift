@@ -413,6 +413,10 @@ enum PlayUrls {
         [".mkv", ".avi", ".wmv", ".flv"].contains { lower.hasSuffix($0) }
     }
 
+    private static func isDirectPlayable(_ lower: String) -> Bool {
+        [".mp4", ".mov", ".webm"].contains { lower.hasSuffix($0) }
+    }
+
     static func video(server: String, token: String, path: String, startAt: Double = 0) -> URL? {
         let normalized = normalizeMediaPath(path)
         let base = normalized.split(separator: "?").first.map(String.init) ?? normalized
@@ -432,7 +436,11 @@ enum PlayUrls {
             return URL(string: "\(url)\(sep)t=\(Int(startAt))")
         }
 
-        // Siempre /api/stream/ (como Android): AVPlayer falla con /uploads/ directo en muchos MP4.
+        // MP4/MOV/WEBM: /uploads/ directo (Range 206). /api/stream/ vía CDN suele devolver 200 sin Range y AVPlayer no reproduce.
+        if isDirectPlayable(lower), base.hasPrefix("/uploads/") {
+            return URL(string: server + (encodedBase.hasPrefix("/") ? encodedBase : "/" + encodedBase))
+        }
+
         if base.hasPrefix("/uploads/movies/") {
             let rel = encodeStreamRel(String(base.dropFirst("/uploads/movies/".count)))
             return withSeek("\(server)/api/stream/movies/\(rel)")
@@ -800,7 +808,7 @@ final class VixPlayerController: ObservableObject {
         if path.contains("/api/live/") && !path.contains("token="), !token.isEmpty {
             headers["Authorization"] = "Bearer \(token)"
         }
-        if path.contains("/api/stream/") {
+        if path.contains("/api/stream/") || path.contains("/uploads/") {
             headers["Accept"] = "*/*"
         }
         let item: AVPlayerItem
@@ -844,6 +852,8 @@ final class VixPlayerController: ObservableObject {
                 DispatchQueue.main.async {
                     self.play(url: retry, startAt: 0, allowTranscodeFallback: false)
                 }
+            } else if observed.status == .failed {
+                DispatchQueue.main.async { self.player = nil }
             }
         }
 

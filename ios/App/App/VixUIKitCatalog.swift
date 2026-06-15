@@ -60,7 +60,20 @@ enum VixUIKitPlayer {
 
     private static func isVodStreamURL(_ url: URL) -> Bool {
         let s = url.absoluteString
-        return s.contains("/api/stream/") || s.contains("/uploads/")
+        return s.contains("/api/stream/")
+    }
+
+    private static func isDirectVodURL(_ url: URL) -> Bool {
+        let s = url.absoluteString.lowercased()
+        return s.contains("/uploads/") && (s.hasSuffix(".mp4") || s.contains(".mp4?")
+            || s.hasSuffix(".mov") || s.contains(".mov?")
+            || s.hasSuffix(".webm") || s.contains(".webm?"))
+    }
+
+    private static func showPlaybackError(from vc: UIViewController, message: String) {
+        let alert = UIAlertController(title: "No se pudo reproducir", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        topPresenter(from: vc).present(alert, animated: true)
     }
 
     private static func topPresenter(from vc: UIViewController) -> UIViewController {
@@ -91,9 +104,10 @@ enum VixUIKitPlayer {
         let token = AuthSession.shared.api.token
         let item = playerItem(for: url, token: token)
         let isStream = isVodStreamURL(url)
-        if isStream {
+        let isDirect = isDirectVodURL(url)
+        if isStream || isDirect {
             item.preferredPeakBitRate = 0
-            item.preferredForwardBufferDuration = 45
+            item.preferredForwardBufferDuration = isDirect ? 30 : 45
         }
 
         func openPlayer() {
@@ -109,16 +123,32 @@ enum VixUIKitPlayer {
                 }
             }
             statusObserver = item.observe(\.status, options: [.new]) { [weak vc] observed, _ in
-                guard observed.status == .failed, allowTranscodeFallback, isStream, let vc else { return }
-                guard var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
-                var query = parts.queryItems ?? []
-                if query.contains(where: { $0.name == "transcode" }) { return }
-                query.append(URLQueryItem(name: "transcode", value: "1"))
-                parts.queryItems = query
-                guard let retry = parts.url else { return }
+                guard observed.status == .failed, let vc else { return }
+                let err = observed.error?.localizedDescription ?? "Formato no soportado o enlace caído."
                 DispatchQueue.main.async {
-                    vc.presentedViewController?.dismiss(animated: false)
-                    playFullscreen(from: vc, url: retry, startAt: 0, allowTranscodeFallback: false, onProgress: onProgress)
+                    if vc.presentedViewController is AVPlayerViewController {
+                        vc.presentedViewController?.dismiss(animated: true)
+                    }
+                    if allowTranscodeFallback, isStream, !isDirect {
+                        guard var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+                            showPlaybackError(from: vc, message: err)
+                            return
+                        }
+                        var query = parts.queryItems ?? []
+                        if query.contains(where: { $0.name == "transcode" }) {
+                            showPlaybackError(from: vc, message: err)
+                            return
+                        }
+                        query.append(URLQueryItem(name: "transcode", value: "1"))
+                        parts.queryItems = query
+                        guard let retry = parts.url else {
+                            showPlaybackError(from: vc, message: err)
+                            return
+                        }
+                        playFullscreen(from: vc, url: retry, startAt: 0, allowTranscodeFallback: false, onProgress: onProgress)
+                        return
+                    }
+                    showPlaybackError(from: vc, message: err)
                 }
             }
             let pvc = AVPlayerViewController()
@@ -129,13 +159,7 @@ enum VixUIKitPlayer {
             }
         }
 
-        if let asset = item.asset as? AVURLAsset {
-            asset.loadValuesAsynchronously(forKeys: ["playable", "duration"]) {
-                DispatchQueue.main.async { openPlayer() }
-            }
-        } else {
-            openPlayer()
-        }
+        openPlayer()
     }
 
     private static func beginPlayback(player: AVPlayer, item: AVPlayerItem, startAt: Double) {

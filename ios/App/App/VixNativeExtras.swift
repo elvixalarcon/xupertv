@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import AVKit
 
 // MARK: - Profile picker
@@ -603,7 +604,29 @@ struct MovieDetailView: View {
 
     private func playMovie() {
         guard let path = detail?.video_path, !path.isEmpty,
-              let url = PlayUrls.video(server: VixConfig.serverURL, token: session.api.token, path: path) else { return }
+              let url = PlayUrls.video(
+                server: VixConfig.serverURL,
+                token: session.api.token,
+                path: PlayUrls.normalizeMediaPath(path),
+                startAt: startAt
+              ) else {
+            errorMessage = "Video no disponible"
+            return
+        }
+        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else {
+            playerCtrl.onProgress = { prog, dur in
+                Task {
+                    try? await session.api.saveWatchProgress(
+                        contentType: "movie", contentId: movieId, seriesId: nil,
+                        progress: prog, duration: dur
+                    )
+                }
+            }
+            playerCtrl.play(url: url, startAt: startAt)
+            showPlayer = true
+            return
+        }
         playerCtrl.onProgress = { prog, dur in
             Task {
                 try? await session.api.saveWatchProgress(
@@ -612,8 +635,7 @@ struct MovieDetailView: View {
                 )
             }
         }
-        playerCtrl.play(url: url, startAt: startAt)
-        showPlayer = true
+        VixUIKitPlayer.playFullscreen(from: root, url: url, startAt: startAt, onProgress: playerCtrl.onProgress)
     }
 
     private func toggleLike() {
