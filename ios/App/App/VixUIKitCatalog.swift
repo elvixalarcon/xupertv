@@ -44,14 +44,23 @@ enum VixUIKitPlayer {
 
     static func playerItem(for url: URL, token: String) -> AVPlayerItem {
         let path = url.absoluteString
-        let needsAuth = path.contains("/api/live/") && !path.contains("token=")
-        if needsAuth, !token.isEmpty {
-            let asset = AVURLAsset(url: url, options: [
-                "AVURLAssetHTTPHeaderFieldsKey": ["Authorization": "Bearer \(token)"]
-            ])
+        var headers: [String: String] = [:]
+        if path.contains("/api/live/") && !path.contains("token="), !token.isEmpty {
+            headers["Authorization"] = "Bearer \(token)"
+        }
+        if path.contains("/api/stream/") || path.contains("/uploads/") {
+            headers["Accept"] = "*/*"
+        }
+        if !headers.isEmpty {
+            let asset = AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
             return AVPlayerItem(asset: asset)
         }
         return AVPlayerItem(url: url)
+    }
+
+    private static func isVodStreamURL(_ url: URL) -> Bool {
+        let s = url.absoluteString
+        return s.contains("/api/stream/") || s.contains("/uploads/")
     }
 
     private static func topPresenter(from vc: UIViewController) -> UIViewController {
@@ -81,15 +90,15 @@ enum VixUIKitPlayer {
         progressHandler = onProgress
         let token = AuthSession.shared.api.token
         let item = playerItem(for: url, token: token)
-        let isStream = url.absoluteString.contains("/api/stream/")
+        let isStream = isVodStreamURL(url)
         if isStream {
             item.preferredPeakBitRate = 0
-            item.preferredForwardBufferDuration = 30
+            item.preferredForwardBufferDuration = 45
         }
 
         func openPlayer() {
             let player = AVPlayer(playerItem: item)
-            player.automaticallyWaitsToMinimizeStalling = true
+            player.automaticallyWaitsToMinimizeStalling = false
             if let onProgress {
                 progressObserver = player.addPeriodicTimeObserver(
                     forInterval: CMTime(seconds: 15, preferredTimescale: 1),
@@ -109,7 +118,7 @@ enum VixUIKitPlayer {
                 guard let retry = parts.url else { return }
                 DispatchQueue.main.async {
                     vc.presentedViewController?.dismiss(animated: false)
-                    playFullscreen(from: vc, url: retry, startAt: startAt, allowTranscodeFallback: false, onProgress: onProgress)
+                    playFullscreen(from: vc, url: retry, startAt: 0, allowTranscodeFallback: false, onProgress: onProgress)
                 }
             }
             let pvc = AVPlayerViewController()
@@ -120,8 +129,8 @@ enum VixUIKitPlayer {
             }
         }
 
-        if isStream, let asset = item.asset as? AVURLAsset {
-            asset.loadValuesAsynchronously(forKeys: ["playable"]) {
+        if let asset = item.asset as? AVURLAsset {
+            asset.loadValuesAsynchronously(forKeys: ["playable", "duration"]) {
                 DispatchQueue.main.async { openPlayer() }
             }
         } else {
@@ -1156,6 +1165,9 @@ final class UIKitLiveViewController: UIViewController {
             do {
                 let group = selectedGroup == "all" ? nil : selectedGroup
                 let ch = try await AuthSession.shared.api.liveChannels(group: group)
+                if selectedGroup == "all" {
+                    ch = ch.filter { !Self.liveCountryGroups.contains(($0.group_title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)) }
+                }
                 await MainActor.run {
                     self.channels = ch
                     self.table.reloadData()
@@ -1168,6 +1180,21 @@ final class UIKitLiveViewController: UIViewController {
         }
     }
 
+    private static let liveCountryGroups: Set<String> = ["Argentina", "Perú", "Chile", "Colombia", "México"]
+
+    private func isAllowedRandomLiveChannel(_ ch: LiveChannel) -> Bool {
+        let g = (ch.group_title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if g.isEmpty || Self.liveCountryGroups.contains(g) { return false }
+        if g.caseInsensitiveCompare("Ecuador") == .orderedSame { return true }
+        if g.caseInsensitiveCompare("Deportes") == .orderedSame { return true }
+        if g.caseInsensitiveCompare("Películas") == .orderedSame { return true }
+        if g.lowercased().hasPrefix("cine") { return true }
+        if g.hasPrefix("Pluto TV ·") { return true }
+        if g == "VIX" || g.hasPrefix("ViX ·") { return true }
+        if g.caseInsensitiveCompare("Freetv") == .orderedSame { return true }
+        return false
+    }
+
     private func playRandomChannel() {
         guard !channels.isEmpty else { return }
         let lastId = UserDefaults.standard.integer(forKey: Self.lastLiveChannelKey)
@@ -1175,8 +1202,18 @@ final class UIKitLiveViewController: UIViewController {
             tuneChannel(channels[idx], at: idx)
             return
         }
-        let idx = Int.random(in: 0..<channels.count)
-        tuneChannel(channels[idx], at: idx)
+        let onlyFeatured = selectedGroup == "all"
+        let pool: [LiveChannel]
+        if onlyFeatured {
+            pool = channels.filter { isAllowedRandomLiveChannel($0) }
+        } else {
+            pool = channels
+        }
+        let pickFrom = pool.isEmpty ? channels : pool
+        let idx = Int.random(in: 0..<pickFrom.count)
+        if let at = channels.firstIndex(where: { $0.id == pickFrom[idx].id }) {
+            tuneChannel(channels[at], at: at)
+        }
     }
 
     private func tuneChannel(_ ch: LiveChannel, at index: Int) {

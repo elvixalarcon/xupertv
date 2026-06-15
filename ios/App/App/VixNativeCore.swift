@@ -409,6 +409,10 @@ enum PlayUrls {
         }.joined(separator: "/")
     }
 
+    private static func needsStreamRemux(_ lower: String) -> Bool {
+        [".mkv", ".avi", ".wmv", ".flv"].contains { lower.hasSuffix($0) }
+    }
+
     static func video(server: String, token: String, path: String, startAt: Double = 0) -> URL? {
         let normalized = normalizeMediaPath(path)
         let base = normalized.split(separator: "?").first.map(String.init) ?? normalized
@@ -421,14 +425,14 @@ enum PlayUrls {
         let encodedBase = base.split(separator: "/").map {
             $0.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String($0)
         }.joined(separator: "/")
-        if base.hasPrefix("/uploads/"), [".mp4", ".webm", ".mov"].contains(where: { lower.hasSuffix($0) }) {
-            return URL(string: server + (encodedBase.hasPrefix("/") ? encodedBase : "/" + encodedBase))
-        }
+
         func withSeek(_ url: String) -> URL? {
-            guard startAt > 5, lower.hasSuffix(".mkv") else { return URL(string: url) }
+            guard startAt > 5, needsStreamRemux(lower) else { return URL(string: url) }
             let sep = url.contains("?") ? "&" : "?"
             return URL(string: "\(url)\(sep)t=\(Int(startAt))")
         }
+
+        // Siempre /api/stream/ (como Android): AVPlayer falla con /uploads/ directo en muchos MP4.
         if base.hasPrefix("/uploads/movies/") {
             let rel = encodeStreamRel(String(base.dropFirst("/uploads/movies/".count)))
             return withSeek("\(server)/api/stream/movies/\(rel)")
@@ -786,13 +790,25 @@ final class VixPlayerController: ObservableObject {
 
     func play(url: URL, startAt: Double = 0) {
         stop()
-        let item = AVPlayerItem(url: url)
+        let token = AuthSession.shared.api.token
+        var headers: [String: String] = [:]
+        let path = url.absoluteString
+        if path.contains("/api/live/") && !path.contains("token="), !token.isEmpty {
+            headers["Authorization"] = "Bearer \(token)"
+        }
+        let item: AVPlayerItem
+        if !headers.isEmpty {
+            let asset = AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
+            item = AVPlayerItem(asset: asset)
+        } else {
+            item = AVPlayerItem(url: url)
+        }
         item.preferredPeakBitRate = 0
         if #available(iOS 10.0, *) {
-            item.preferredForwardBufferDuration = 30
+            item.preferredForwardBufferDuration = path.contains("/api/stream/") ? 45 : 30
         }
         let p = AVPlayer(playerItem: item)
-        p.automaticallyWaitsToMinimizeStalling = true
+        p.automaticallyWaitsToMinimizeStalling = false
         player = p
 
         func startPlayback() {
