@@ -1165,9 +1165,6 @@ final class UIKitLiveViewController: UIViewController {
             do {
                 let group = selectedGroup == "all" ? nil : selectedGroup
                 let ch = try await AuthSession.shared.api.liveChannels(group: group)
-                if selectedGroup == "all" {
-                    ch = ch.filter { !Self.liveCountryGroups.contains(($0.group_title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)) }
-                }
                 await MainActor.run {
                     self.channels = ch
                     self.table.reloadData()
@@ -1180,21 +1177,6 @@ final class UIKitLiveViewController: UIViewController {
         }
     }
 
-    private static let liveCountryGroups: Set<String> = ["Argentina", "Perú", "Chile", "Colombia", "México"]
-
-    private func isAllowedRandomLiveChannel(_ ch: LiveChannel) -> Bool {
-        let g = (ch.group_title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        if g.isEmpty || Self.liveCountryGroups.contains(g) { return false }
-        if g.caseInsensitiveCompare("Ecuador") == .orderedSame { return true }
-        if g.caseInsensitiveCompare("Deportes") == .orderedSame { return true }
-        if g.caseInsensitiveCompare("Películas") == .orderedSame { return true }
-        if g.lowercased().hasPrefix("cine") { return true }
-        if g.hasPrefix("Pluto TV ·") { return true }
-        if g == "VIX" || g.hasPrefix("ViX ·") { return true }
-        if g.caseInsensitiveCompare("Freetv") == .orderedSame { return true }
-        return false
-    }
-
     private func playRandomChannel() {
         guard !channels.isEmpty else { return }
         let lastId = UserDefaults.standard.integer(forKey: Self.lastLiveChannelKey)
@@ -1202,18 +1184,8 @@ final class UIKitLiveViewController: UIViewController {
             tuneChannel(channels[idx], at: idx)
             return
         }
-        let onlyFeatured = selectedGroup == "all"
-        let pool: [LiveChannel]
-        if onlyFeatured {
-            pool = channels.filter { isAllowedRandomLiveChannel($0) }
-        } else {
-            pool = channels
-        }
-        let pickFrom = pool.isEmpty ? channels : pool
-        let idx = Int.random(in: 0..<pickFrom.count)
-        if let at = channels.firstIndex(where: { $0.id == pickFrom[idx].id }) {
-            tuneChannel(channels[at], at: at)
-        }
+        let idx = Int.random(in: 0..<channels.count)
+        tuneChannel(channels[idx], at: idx)
     }
 
     private func tuneChannel(_ ch: LiveChannel, at index: Int) {
