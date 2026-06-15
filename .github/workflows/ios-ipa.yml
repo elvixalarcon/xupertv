@@ -10,6 +10,9 @@ on:
       - 'ios/**'
       - '.github/workflows/ios-ipa.yml'
 
+permissions:
+  contents: write
+
 jobs:
   build-ipa:
     runs-on: macos-latest
