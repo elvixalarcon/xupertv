@@ -43,3 +43,15 @@ jobs:
           name: VixTV-unsigned-ipa
           path: data/ipa/VixTV.ipa
           retention-days: 30
+
+      - name: Publish IPA to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(grep -m1 'MARKETING_VERSION = ' ios/App/App.xcodeproj/project.pbxproj | sed 's/.*= //;s/;//;s/ //g')
+          TAG="ios-v${VERSION}"
+          gh release view "$TAG" >/dev/null 2>&1 && \
+            gh release upload "$TAG" data/ipa/VixTV.ipa data/ipa/versions.json --clobber || \
+            gh release create "$TAG" data/ipa/VixTV.ipa data/ipa/versions.json \
+              --title "Vix TV iOS ${VERSION}" \
+              --notes "IPA sin firmar generado por GitHub Actions. Firmar en servidor o con eSign."
