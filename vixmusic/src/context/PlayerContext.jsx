@@ -17,6 +17,7 @@ import { resolveAudioStream } from '../lib/resolveAudio';
 import {
   unlockAudioElement,
   resolveStreamPlaybackUrl,
+  startStreamPlayback,
   fetchStreamBlobUrl,
   mapAudioError,
 } from '../lib/audioPlayback';
@@ -261,22 +262,23 @@ export function PlayerProvider({ children }) {
         });
         setVideoPreview(false);
         bindMediaSession(resolved);
+        setResolving(false);
 
-        const beginPlayback = async (src) => {
-          audio.src = src;
-          if (fromUser) {
-            await audio.play();
-            startBackgroundPlayback(resolved).catch(() => {});
-          }
+        const onStarted = () => {
+          if (fromUser) startBackgroundPlayback(resolved).catch(() => {});
         };
 
         if (useNativeAudio) {
           let started = false;
           try {
-            await beginPlayback(resolveStreamPlaybackUrl(stream.url));
+            await startStreamPlayback(audio, resolveStreamPlaybackUrl(stream.url), {
+              timeoutMs: 12000,
+              autoplay: fromUser,
+            });
             started = true;
+            onStarted();
           } catch {
-            /* streaming directo falló — intentar buffer completo */
+            /* streaming falló — respaldo con descarga completa */
           }
 
           if (!started) {
@@ -285,10 +287,12 @@ export function PlayerProvider({ children }) {
               URL.revokeObjectURL(audioBlobUrlRef.current);
             }
             audioBlobUrlRef.current = blobUrl;
-            await beginPlayback(blobUrl);
+            await startStreamPlayback(audio, blobUrl, { timeoutMs: 15000, autoplay: fromUser });
+            onStarted();
           }
         } else {
-          await beginPlayback(stream.url);
+          await startStreamPlayback(audio, stream.url, { timeoutMs: 12000, autoplay: fromUser });
+          onStarted();
         }
 
         setPlayerError('');

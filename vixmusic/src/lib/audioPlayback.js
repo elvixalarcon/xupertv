@@ -48,7 +48,47 @@ export function resolveStreamPlaybackUrl(cdnUrl) {
   return getProxiedStreamUrl(cdnUrl);
 }
 
-/** Descarga el audio completo y devuelve blob URL (respaldo para segundo plano). */
+function waitForMediaReady(audio, timeoutMs) {
+  if (audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => {
+      clearTimeout(timer);
+      audio.removeEventListener('canplay', onReady);
+      audio.removeEventListener('loadeddata', onReady);
+      audio.removeEventListener('error', onError);
+    };
+    const finish = (ok, err) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      ok ? resolve() : reject(err);
+    };
+    const onReady = () => finish(true);
+    const onError = () => finish(false, new Error(mapAudioError(audio)));
+    const timer = setTimeout(
+      () => finish(false, new Error('Tiempo de espera agotado')),
+      timeoutMs,
+    );
+
+    audio.addEventListener('canplay', onReady);
+    audio.addEventListener('loadeddata', onReady);
+    audio.addEventListener('error', onError, { once: true });
+  });
+}
+
+/** Inicia streaming sin descargar el archivo completo. */
+export async function startStreamPlayback(audio, src, { timeoutMs = 12000, autoplay = true } = {}) {
+  audio.src = src;
+  audio.load();
+  await waitForMediaReady(audio, timeoutMs);
+  if (autoplay) await audio.play();
+}
+
+/** Descarga el audio completo y devuelve blob URL (solo respaldo). */
 export async function fetchStreamBlobUrl(cdnUrl, mimeType = 'audio/mp4') {
   const attempts = isNativePlayback()
     ? [getProxiedStreamUrl(cdnUrl), cdnUrl]

@@ -17,9 +17,21 @@ function handle_resolve_audio(): void
         json_error('Extractor de audio no disponible en el servidor', 503);
     }
 
+    $cacheDir = sys_get_temp_dir() . '/vixmusic-resolve-cache';
+    if (!is_dir($cacheDir)) {
+        @mkdir($cacheDir, 0755, true);
+    }
+    $cacheFile = $cacheDir . '/' . $id . '.json';
+    if (is_readable($cacheFile) && (time() - (int) filemtime($cacheFile)) < 1800) {
+        $cached = json_decode((string) file_get_contents($cacheFile), true);
+        if (is_array($cached) && !empty($cached['url'])) {
+            json_response($cached);
+        }
+    }
+
     $watch = 'https://www.youtube.com/watch?v=' . $id;
     $cmd = sprintf(
-        '%s -f ba -g --no-playlist --no-warnings --socket-timeout 30 %s 2>/dev/null',
+        '%s -f "ba[ext=m4a]/ba[ext=webm]/ba/b" -g --no-playlist --no-warnings --socket-timeout 20 %s 2>/dev/null',
         escapeshellcmd($ytdlp),
         escapeshellarg($watch)
     );
@@ -31,12 +43,17 @@ function handle_resolve_audio(): void
     $mime = 'audio/mp4';
     if (str_contains($url, 'mime=audio%2Fwebm') || str_contains($url, '.webm')) {
         $mime = 'audio/webm';
+    } elseif (str_contains($url, 'mime=audio%2Fmp4') || str_contains($url, '.m4a')) {
+        $mime = 'audio/mp4';
     }
 
-    json_response([
+    $payload = [
         'ok' => true,
         'url' => $url,
         'videoId' => $id,
         'mimeType' => $mime,
-    ]);
+    ];
+    @file_put_contents($cacheFile, json_encode($payload, JSON_UNESCAPED_SLASHES));
+
+    json_response($payload);
 }

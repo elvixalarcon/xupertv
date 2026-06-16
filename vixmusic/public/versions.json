@@ -1,14 +1,14 @@
 {
   "android": {
-    "version": "1.3.13",
-    "versionCode": 18,
+    "version": "1.3.14",
+    "versionCode": 19,
     "url": "http://5.5.5.8/vixmusic/VixMusic-release.apk",
-    "notes": "Corrección crítica: vuelve a reproducir canciones online en la app."
+    "notes": "Reproducción más rápida: menos espera al pulsar una canción."
   },
   "ios": {
-    "version": "1.3.13",
-    "build": 18,
+    "version": "1.3.14",
+    "build": 19,
     "url": "http://5.5.5.8/vixmusic/VixMusic.ipa",
-    "notes": "Corrección crítica: vuelve a reproducir canciones online."
+    "notes": "Reproducción más rápida al iniciar canciones."
   }
 }
