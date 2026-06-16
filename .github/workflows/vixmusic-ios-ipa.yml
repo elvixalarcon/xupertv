@@ -7,7 +7,9 @@ on:
     paths:
       - 'vixmusic/ios/**'
       - 'vixmusic/src/**'
-      - 'vixmusic/.github/workflows/vixmusic-ios-ipa.yml'
+      - 'vixmusic/public/**'
+      - 'vixmusic/capacitor.config.json'
+      - 'vixmusic/package.json'
       - '.github/workflows/vixmusic-ios-ipa.yml'
 
 permissions:
@@ -51,4 +53,3 @@ jobs:
             gh release create "$TAG" data/ipa/VixMusic-unsigned.ipa data/ipa/versions.json \
               --title "VixMusic iOS ${VERSION}" \
               --notes "IPA sin firmar (Capacitor). Instalar con eSign, AltStore o Sideloadly."
-        working-directory: vixmusic
