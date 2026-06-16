@@ -222,7 +222,9 @@ export function PlayerProvider({ children }) {
       bindMediaSession(track);
 
       if (fromUser) {
-        audio.play().catch(() => setPlayerError('No se pudo reproducir offline'));
+        startBackgroundPlayback(track).then(() => {
+          audio.play().catch(() => setPlayerError('No se pudo reproducir offline'));
+        });
       }
     },
     [pauseYouTube, stopAudio, volume, ensureAudio, bindMediaSession],
@@ -261,21 +263,19 @@ export function PlayerProvider({ children }) {
         bindMediaSession(resolved);
 
         const loadAndPlay = async (src) => {
+          await startBackgroundPlayback(resolved);
           audio.src = src;
           if (fromUser) await audio.play();
         };
 
         if (useNativeAudio) {
-          try {
-            await loadAndPlay(resolveStreamPlaybackUrl(stream.url));
-          } catch {
-            const blobUrl = await fetchStreamBlobUrl(stream.url, stream.mimeType);
-            if (audioBlobUrlRef.current?.startsWith('blob:')) {
-              URL.revokeObjectURL(audioBlobUrlRef.current);
-            }
-            audioBlobUrlRef.current = blobUrl;
-            await loadAndPlay(blobUrl);
+          // Buffer completo: mismo comportamiento que offline en segundo plano
+          const blobUrl = await fetchStreamBlobUrl(stream.url, stream.mimeType);
+          if (audioBlobUrlRef.current?.startsWith('blob:')) {
+            URL.revokeObjectURL(audioBlobUrlRef.current);
           }
+          audioBlobUrlRef.current = blobUrl;
+          await loadAndPlay(blobUrl);
         } else {
           await loadAndPlay(stream.url);
         }
@@ -401,12 +401,12 @@ export function PlayerProvider({ children }) {
         try {
           await playStream(track, newList, startIndex, fromUser);
           return;
-        } catch {
+        } catch (e) {
           stopAudio();
           usingAudioRef.current = false;
           setBackgroundAudio(false);
-          setPlayerError('');
-          /* Fallback: reproductor YouTube embebido */
+          setPlayerError(friendlyError(e, 'No se pudo cargar el audio online'));
+          return;
         }
       }
 

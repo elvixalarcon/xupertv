@@ -21,6 +21,16 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onPause() {
         super.onPause();
+        keepWebViewAlive();
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        keepWebViewAlive();
+    }
+
+    private void keepWebViewAlive() {
         // Evita que Android pause el WebView y corte el audio en segundo plano
         Bridge bridge = getBridge();
         if (bridge != null) {

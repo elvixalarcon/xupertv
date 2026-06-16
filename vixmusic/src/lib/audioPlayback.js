@@ -48,9 +48,11 @@ export function resolveStreamPlaybackUrl(cdnUrl) {
   return getProxiedStreamUrl(cdnUrl);
 }
 
-/** Respaldo: descarga el audio con cabeceras y devuelve blob URL. */
+/** Descarga el audio completo y devuelve blob URL (necesario para segundo plano en móvil). */
 export async function fetchStreamBlobUrl(cdnUrl, mimeType = 'audio/mp4') {
-  const blob = await httpGetBlob(cdnUrl, 300000, YT_STREAM_HEADERS);
+  const fetchUrl = isNativePlayback() ? getProxiedStreamUrl(cdnUrl) : cdnUrl;
+  const headers = isNativePlayback() ? {} : YT_STREAM_HEADERS;
+  const blob = await httpGetBlob(fetchUrl, 300000, headers);
   return URL.createObjectURL(new Blob([blob], { type: mimeType || 'audio/mp4' }));
 }
 

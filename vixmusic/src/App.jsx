@@ -100,7 +100,7 @@ export default function App() {
     <OfflineProvider>
       <PlayerProvider>
         <BrowserRouter basename={getRouterBasename()}>
-        <div className={`app-frame${native ? ' app-frame--native' : ''}${nowPlayingView ? ' app-frame--now-playing' : ''}`}>
+        <div className={`app-frame${native ? ' app-frame--native' : ''}${nowPlayingView ? ' app-frame--np-open' : ''}`}>
           <DownloadBanner />
           <YouTubePlayerHost />
           <div className={`spotify-app ${panelOpen ? '' : 'spotify-app--panel-hidden'}`}>
