@@ -34,7 +34,7 @@ git add -A
 if git diff --staged --quiet; then
   echo "Sin cambios"
 else
-  git commit -m "VixMusic 1.3.14: reproducción más rápida en apps"
+  git commit -m "VixMusic 1.3.15: inicio personalizado por usuario"
   git push origin main
 fi
 

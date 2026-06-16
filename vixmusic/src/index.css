@@ -2112,8 +2112,14 @@ html.native-app .mobile-nav__item:active {
 }
 
 .section-hint {
-  font-size: 0.8rem;
-  color: var(--text-muted);
+  font-size: 0.85rem;
+  color: var(--text-muted, #a0a0a0);
+}
+
+.home-personalize-hint {
+  margin: 0 0 1.25rem;
+  color: var(--text-muted, #a0a0a0);
+  font-size: 0.9rem;
 }
 
 .playlist-create {

@@ -69,6 +69,7 @@ export const vixApi = {
   addPlaylistTrack: (id, track) => request(`/playlists/${id}/tracks`, { method: 'POST', body: JSON.stringify({ track }) }),
   removePlaylistTrack: (id, trackId) => request(`/playlists/${id}/tracks/${encodeURIComponent(trackId)}`, { method: 'DELETE' }),
   addHistory: (track) => request('/history', { method: 'POST', body: JSON.stringify({ track }) }),
+  listHistory: (limit = 40) => request(`/history?limit=${limit}`),
   recommendations: () => request('/recommendations'),
   adminUsers: () => request('/admin/users'),
   adminCreateUser: (body) => request('/admin/users', { method: 'POST', body: JSON.stringify(body) }),

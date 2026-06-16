@@ -102,6 +102,9 @@ function route(string $method, string $uri): void
         handle_remove_playlist_track((int) $m[1], urldecode($m[2]));
     }
 
+    if ($uri === '/history' && $method === 'GET') {
+        handle_list_history();
+    }
     if ($uri === '/history' && $method === 'POST') {
         handle_add_history();
     }
@@ -421,9 +424,46 @@ function handle_add_history(): void
     if (!is_array($track) || empty($track['id'])) {
         json_error('track requerido');
     }
+    $tid = (string) $track['id'];
     db()->prepare('INSERT INTO play_history (user_id, track_id, track_json) VALUES (?, ?, ?)')
-        ->execute([$user['id'], (string) $track['id'], json_encode($track, JSON_UNESCAPED_UNICODE)]);
+        ->execute([$user['id'], $tid, json_encode($track, JSON_UNESCAPED_UNICODE)]);
     json_response(['ok' => true]);
+}
+
+function handle_list_history(): void
+{
+    $user = require_auth();
+    $limit = (int) ($_GET['limit'] ?? 40);
+    if ($limit < 1) {
+        $limit = 1;
+    }
+    if ($limit > 100) {
+        $limit = 100;
+    }
+
+    $st = db()->prepare(
+        'SELECT track_id, track_json, played_at FROM play_history WHERE user_id = ? ORDER BY played_at DESC LIMIT 200'
+    );
+    $st->execute([$user['id']]);
+
+    $items = [];
+    $seen = [];
+    foreach ($st->fetchAll() as $row) {
+        $track = json_decode($row['track_json'], true) ?: [];
+        $tid = (string) ($track['id'] ?? $row['track_id'] ?? '');
+        if ($tid === '' || isset($seen[$tid])) {
+            continue;
+        }
+        $seen[$tid] = true;
+        $track['id'] = $tid;
+        $track['playedAt'] = strtotime((string) $row['played_at']) * 1000;
+        $items[] = $track;
+        if (count($items) >= $limit) {
+            break;
+        }
+    }
+
+    json_response(['ok' => true, 'items' => $items]);
 }
 
 function handle_recommendations(): void

@@ -28,6 +28,7 @@ import {
   stopBackgroundPlayback,
 } from '../lib/backgroundPlayback';
 import { App } from '@capacitor/app';
+import { recordPlayForUser } from '../lib/recordPlay';
 
 const PlayerContext = createContext(null);
 export const PLAYER_HOST_ID = 'vix-yt-player-host';
@@ -56,6 +57,13 @@ export function PlayerProvider({ children }) {
   const pendingRef = useRef(null);
   const advancingRef = useRef(false);
   const wantsPlayRef = useRef(false);
+  const notePlaybackRef = useRef(() => {});
+
+  const notePlayback = useCallback((track) => {
+    if (track?.id) recordPlayForUser(track);
+  }, []);
+
+  notePlaybackRef.current = notePlayback;
   const playTrackInternalRef = useRef(null);
   const failedVideosRef = useRef(new Set());
   const alternateVideosRef = useRef([]);
@@ -224,11 +232,13 @@ export function PlayerProvider({ children }) {
 
       if (fromUser) {
         startBackgroundPlayback(track).then(() => {
-          audio.play().catch(() => setPlayerError('No se pudo reproducir offline'));
+          audio.play()
+            .then(() => notePlayback(track))
+            .catch(() => setPlayerError('No se pudo reproducir offline'));
         });
       }
     },
-    [pauseYouTube, stopAudio, volume, ensureAudio, bindMediaSession],
+    [pauseYouTube, stopAudio, volume, ensureAudio, bindMediaSession, notePlayback],
   );
 
   const playStream = useCallback(
@@ -296,6 +306,7 @@ export function PlayerProvider({ children }) {
         }
 
         setPlayerError('');
+        notePlayback(resolved);
       } catch (e) {
         setPlayerError(friendlyError(e, 'No se pudo cargar el audio'));
         throw e;
@@ -303,7 +314,7 @@ export function PlayerProvider({ children }) {
         setResolving(false);
       }
     },
-    [pauseYouTube, stopAudio, volume, ensureAudio, bindMediaSession],
+    [pauseYouTube, stopAudio, volume, ensureAudio, bindMediaSession, notePlayback],
   );
 
   const startVideo = useCallback((videoId, fromUser = false) => {
@@ -714,6 +725,7 @@ export function PlayerProvider({ children }) {
               wantsPlayRef.current = false;
               const cur = queueRef.current[indexRef.current];
               startBackgroundPlayback(cur);
+              if (cur) notePlayback(cur);
             }
             if (e.data === YT.PlayerState.PAUSED) {
               setPlaying(false);
