@@ -13,6 +13,7 @@ import { getDownloadForTrack, getPlaybackUrl, hasOfflineAudio } from '../lib/dow
 import { getOfflineId } from '../lib/offlineIds';
 import { isNativeApp } from '../lib/platform';
 import { getPipedAudioStreamUrl } from '../api/piped';
+import { resolveAudioStream } from '../lib/resolveAudio';
 import {
   unlockAudioElement,
   resolveStreamPlaybackUrl,
@@ -20,6 +21,11 @@ import {
   mapAudioError,
 } from '../lib/audioPlayback';
 import { setupMediaSession, setMediaPlaybackState, clearMediaSession } from '../lib/mediaSession';
+import {
+  requestPlaybackPermissions,
+  startBackgroundPlayback,
+  stopBackgroundPlayback,
+} from '../lib/backgroundPlayback';
 
 const PlayerContext = createContext(null);
 export const PLAYER_HOST_ID = 'vix-yt-player-host';
@@ -113,10 +119,13 @@ export function PlayerProvider({ children }) {
       audio.addEventListener('play', () => {
         setPlaying(true);
         setMediaPlaybackState(true);
+        const cur = queueRef.current[indexRef.current] || current;
+        startBackgroundPlayback(cur);
       });
       audio.addEventListener('pause', () => {
         setPlaying(false);
         setMediaPlaybackState(false);
+        stopBackgroundPlayback();
       });
       audio.addEventListener('error', () => {
         if (!usingAudioRef.current) return;
@@ -159,6 +168,7 @@ export function PlayerProvider({ children }) {
     audioModeRef.current = null;
     setOfflineMode(false);
     setBackgroundAudio(false);
+    stopBackgroundPlayback();
     clearMediaSession();
   }, []);
 
@@ -226,7 +236,7 @@ export function PlayerProvider({ children }) {
       if (fromUser) unlockAudioElement(ensureAudio());
 
       try {
-        const stream = await getPipedAudioStreamUrl(
+        const stream = await resolveAudioStream(
           track.videoId,
           track.alternateVideoIds || alternateVideosRef.current || [],
         );
@@ -680,9 +690,17 @@ export function PlayerProvider({ children }) {
               setPlaying(true);
               setPlayerError('');
               wantsPlayRef.current = false;
+              const cur = queueRef.current[indexRef.current];
+              startBackgroundPlayback(cur);
             }
-            if (e.data === YT.PlayerState.PAUSED) setPlaying(false);
-            if (e.data === YT.PlayerState.ENDED) nextRef.current();
+            if (e.data === YT.PlayerState.PAUSED) {
+              setPlaying(false);
+              stopBackgroundPlayback();
+            }
+            if (e.data === YT.PlayerState.ENDED) {
+              stopBackgroundPlayback();
+              nextRef.current();
+            }
             if (
               wantsPlayRef.current
               && p

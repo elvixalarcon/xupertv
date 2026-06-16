@@ -7,7 +7,7 @@ import {
   useState,
 } from 'react';
 import { resolveForPlayback } from '../api/unified';
-import { getPipedAudioStreamUrl } from '../api/piped';
+import { resolveAudioStream } from '../lib/resolveAudio';
 import {
   getDownloadForTrack,
   listDownloads,
@@ -18,7 +18,7 @@ import {
 } from '../lib/downloads';
 import { getOfflineId } from '../lib/offlineIds';
 import { httpGetBlob } from '../lib/http';
-import { YT_STREAM_HEADERS } from '../lib/audioPlayback';
+import { getProxiedStreamUrl, isNativePlayback } from '../lib/audioPlayback';
 
 const OfflineContext = createContext(null);
 
@@ -59,13 +59,16 @@ export function OfflineProvider({ children }) {
         }
 
         setActiveDownload({ id: oid, title: track.title, progress: 35 });
-        const stream = await getPipedAudioStreamUrl(
+        const stream = await resolveAudioStream(
           resolved.videoId,
           resolved.alternateVideoIds || [],
         );
 
         setActiveDownload({ id: oid, title: track.title, progress: 55 });
-        const blob = await httpGetBlob(stream.url, 180000, YT_STREAM_HEADERS);
+        const downloadUrl = isNativePlayback()
+          ? getProxiedStreamUrl(stream.url)
+          : stream.url;
+        const blob = await httpGetBlob(downloadUrl, 300000);
         if (!blob.size) throw new Error('Archivo vacío');
 
         await saveDownload(

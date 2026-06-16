@@ -13,6 +13,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 require __DIR__ . '/lib/helpers.php';
 require __DIR__ . '/lib/db.php';
 require __DIR__ . '/lib/stream.php';
+require __DIR__ . '/lib/resolve_audio.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
 $uri = $_SERVER['PATH_INFO'] ?? '';
@@ -41,6 +42,10 @@ function route(string $method, string $uri): void
 
     if ($uri === '/stream' && $method === 'GET') {
         handle_audio_stream();
+    }
+
+    if ($uri === '/resolve-audio' && $method === 'GET') {
+        handle_resolve_audio();
     }
 
     if ($uri === '/auth/register' && $method === 'POST') {

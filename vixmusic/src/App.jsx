@@ -23,6 +23,7 @@ import AdminView from './views/AdminView';
 import PlaylistsView from './views/PlaylistsView';
 import { initAppConfig } from './api/config';
 import { getRouterBasename, isNativeApp } from './lib/platform';
+import { requestPlaybackPermissions } from './lib/backgroundPlayback';
 import UpdateChecker from './components/UpdateChecker';
 import NativeChrome from './components/NativeChrome';
 import './index.css';
@@ -66,6 +67,7 @@ export default function App() {
     (async () => {
       try {
         await initAppConfig();
+        if (isNativeApp()) await requestPlaybackPermissions();
       } catch {
         /* ignore */
       } finally {
