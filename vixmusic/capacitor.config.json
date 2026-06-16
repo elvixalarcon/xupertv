@@ -1,0 +1,8 @@
+{
+  "appId": "com.vixmusic.app",
+  "appName": "VixMusic",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}

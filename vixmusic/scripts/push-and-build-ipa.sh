@@ -15,8 +15,13 @@ git clone --depth 1 "$REPO" "$WORKDIR"
 
 rsync -a --delete \
   --exclude node_modules \
-  --exclude android/app/build \
   --exclude dist \
+  --exclude android/app/build \
+  --exclude android/.gradle \
+  --exclude android/.kotlin \
+  --exclude '*.apk' \
+  --exclude android/vixmusic-release.keystore \
+  --exclude android/keystore.properties \
   --exclude .git \
   "$ROOT/" "$WORKDIR/vixmusic/"
 
@@ -27,9 +32,9 @@ git config user.email "deploy@vixmusic.local"
 git config user.name "VixMusic"
 git add -A
 if git diff --staged --quiet; then
-  echo "Sin cambios en git"
+  echo "Sin cambios"
 else
-  git commit -m "VixMusic $(date +%Y-%m-%d): UI móvil, fix API, descargas"
+  git commit -m "VixMusic 1.3.0: compilación IPA limpia"
   git push origin main
 fi
 
@@ -39,4 +44,4 @@ curl -sS -X POST \
   "https://api.github.com/repos/elvixalarcon/xupertv/actions/workflows/vixmusic-ios-ipa.yml/dispatches" \
   -d '{"ref":"main"}'
 
-echo "OK: workflow disparado"
+echo "OK: workflow IPA disparado"

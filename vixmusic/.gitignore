@@ -1,0 +1,22 @@
+node_modules
+dist
+dist-ssr
+*.local
+.DS_Store
+
+# Secrets / local config
+public/config.json
+private/
+android/keystore.properties
+android/*.keystore
+android/local.properties
+
+# Android build
+android/app/build
+android/.gradle
+
+# iOS build
+ios/App/Pods
+ios/App/build
+ios/App/DerivedData
+data/ipa/*.ipa

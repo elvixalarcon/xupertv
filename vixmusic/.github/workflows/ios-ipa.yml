@@ -1,15 +1,13 @@
-name: VixMusic iOS IPA
+name: iOS IPA (VixMusic)
 
 on:
   workflow_dispatch:
   push:
     branches: [main, master]
     paths:
-      - 'vixmusic/ios/**'
-      - 'vixmusic/src/**'
-      - 'vixmusic/public/**'
-      - 'vixmusic/package.json'
-      - '.github/workflows/vixmusic-ios-ipa.yml'
+      - 'ios/**'
+      - 'src/**'
+      - '.github/workflows/ios-ipa.yml'
 
 permissions:
   contents: write
@@ -17,9 +15,6 @@ permissions:
 jobs:
   build-ipa:
     runs-on: macos-latest
-    defaults:
-      run:
-        working-directory: vixmusic
     steps:
       - uses: actions/checkout@v4
 
@@ -27,7 +22,6 @@ jobs:
         with:
           node-version: '20'
           cache: npm
-          cache-dependency-path: vixmusic/package-lock.json
 
       - name: Build unsigned IPA
         run: |
@@ -38,7 +32,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: VixMusic-unsigned-ipa
-          path: vixmusic/data/ipa/VixMusic-unsigned.ipa
+          path: data/ipa/VixMusic-unsigned.ipa
           retention-days: 30
 
       - name: Publish IPA to GitHub Release
@@ -46,9 +40,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION=$(node -p "require('./data/ipa/versions.json').versionName")
-          TAG="vixmusic-ios-v${VERSION}"
+          TAG="ios-v${VERSION}"
           gh release view "$TAG" >/dev/null 2>&1 && \
             gh release upload "$TAG" data/ipa/VixMusic-unsigned.ipa data/ipa/versions.json --clobber || \
             gh release create "$TAG" data/ipa/VixMusic-unsigned.ipa data/ipa/versions.json \
               --title "VixMusic iOS ${VERSION}" \
-              --notes "IPA sin firmar. Instalar con eSign, AltStore o Sideloadly."
+              --notes "IPA sin firmar (Capacitor). Instalar con eSign, AltStore o Sideloadly."
