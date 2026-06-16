@@ -8,11 +8,13 @@ import android.app.Service;
 import android.content.Intent;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.PowerManager;
 import androidx.core.app.NotificationCompat;
 
 public class MediaPlaybackService extends Service {
     public static final String CHANNEL_ID = "vixmusic_playback";
     private static final int NOTIFICATION_ID = 1001;
+    private PowerManager.WakeLock wakeLock;
 
     @Override
     public void onCreate() {
@@ -26,6 +28,8 @@ public class MediaPlaybackService extends Service {
         String artist = intent != null ? intent.getStringExtra("artist") : null;
         if (title == null || title.isEmpty()) title = "VixMusic";
         if (artist == null) artist = "";
+
+        acquireWakeLock();
 
         Intent launch = new Intent(this, MainActivity.class);
         launch.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
@@ -45,7 +49,7 @@ public class MediaPlaybackService extends Service {
             .setContentIntent(pending)
             .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build();
 
         startForeground(NOTIFICATION_ID, notification);
@@ -54,13 +58,33 @@ public class MediaPlaybackService extends Service {
 
     @Override
     public void onDestroy() {
-        stopForeground(true);
+        releaseWakeLock();
+        stopForeground(STOP_FOREGROUND_REMOVE);
         super.onDestroy();
     }
 
     @Override
     public IBinder onBind(Intent intent) {
         return null;
+    }
+
+    private void acquireWakeLock() {
+        if (wakeLock == null) {
+            PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+            if (pm != null) {
+                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "VixMusic::Playback");
+                wakeLock.setReferenceCounted(false);
+            }
+        }
+        if (wakeLock != null && !wakeLock.isHeld()) {
+            wakeLock.acquire();
+        }
+    }
+
+    private void releaseWakeLock() {
+        if (wakeLock != null && wakeLock.isHeld()) {
+            wakeLock.release();
+        }
     }
 
     private void createChannel() {
@@ -72,6 +96,7 @@ public class MediaPlaybackService extends Service {
         );
         channel.setDescription("Mantiene VixMusic reproduciendo en segundo plano");
         channel.setShowBadge(false);
+        channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
         NotificationManager manager = getSystemService(NotificationManager.class);
         if (manager != null) manager.createNotificationChannel(channel);
     }

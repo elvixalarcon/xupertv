@@ -26,6 +26,7 @@ import {
   startBackgroundPlayback,
   stopBackgroundPlayback,
 } from '../lib/backgroundPlayback';
+import { App } from '@capacitor/app';
 
 const PlayerContext = createContext(null);
 export const PLAYER_HOST_ID = 'vix-yt-player-host';
@@ -785,6 +786,44 @@ export function PlayerProvider({ children }) {
       document.removeEventListener('click', onGesture);
     };
   }, [ensureAudio]);
+
+  useEffect(() => {
+    if (!isNativeApp()) return undefined;
+
+    const keepAudioAlive = () => {
+      const audio = audioRef.current;
+      if (usingAudioRef.current && audio && !audio.paused) {
+        audio.play().catch(() => {});
+      }
+      const p = playerRef.current;
+      if (p?.getPlayerState) {
+        try {
+          const YT = window.YT;
+          if (YT && p.getPlayerState() === YT.PlayerState.PLAYING) {
+            p.playVideo();
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+
+    const onHide = () => keepAudioAlive();
+    document.addEventListener('visibilitychange', onHide);
+
+    let appListener;
+    App.addListener('appStateChange', ({ isActive }) => {
+      if (!isActive) keepAudioAlive();
+    }).then((h) => { appListener = h; });
+
+    const pulse = setInterval(keepAudioAlive, 2500);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onHide);
+      appListener?.remove();
+      clearInterval(pulse);
+    };
+  }, []);
 
   useEffect(() => {
     if (!playerReady) return;

@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { resolveForPlayback } from '../api/unified';
@@ -22,11 +23,34 @@ import { getProxiedStreamUrl, isNativePlayback } from '../lib/audioPlayback';
 
 const OfflineContext = createContext(null);
 
+function bumpProgress(setter, oid, patch) {
+  setter((prev) => (prev?.id === oid ? { ...prev, ...patch } : prev));
+}
+
 export function OfflineProvider({ children }) {
   const [downloads, setDownloads] = useState([]);
   const [downloadedIds, setDownloadedIds] = useState(() => new Set());
   const [storageLabel, setStorageLabel] = useState('0 MB');
   const [activeDownload, setActiveDownload] = useState(null);
+  const progressTimer = useRef(null);
+
+  const clearProgressTimer = useCallback(() => {
+    if (progressTimer.current) {
+      clearInterval(progressTimer.current);
+      progressTimer.current = null;
+    }
+  }, []);
+
+  const startProgressPulse = useCallback((oid, from, to) => {
+    clearProgressTimer();
+    progressTimer.current = setInterval(() => {
+      setActiveDownload((prev) => {
+        if (!prev || prev.id !== oid) return prev;
+        if (prev.progress >= to) return prev;
+        return { ...prev, progress: Math.min(prev.progress + 1, to) };
+      });
+    }, 450);
+  }, [clearProgressTimer]);
 
   const refresh = useCallback(async () => {
     const list = await listDownloads();
@@ -38,7 +62,8 @@ export function OfflineProvider({ children }) {
 
   useEffect(() => {
     refresh();
-  }, [refresh]);
+    return () => clearProgressTimer();
+  }, [refresh, clearProgressTimer]);
 
   const isDownloaded = useCallback(
     (track) => downloadedIds.has(getOfflineId(track)),
@@ -50,25 +75,37 @@ export function OfflineProvider({ children }) {
       const oid = getOfflineId(track);
       if (downloadedIds.has(oid)) return;
 
-      setActiveDownload({ id: oid, title: track.title, progress: 5 });
+      setActiveDownload({
+        id: oid,
+        title: track.title,
+        progress: 3,
+        phase: 'Preparando…',
+      });
+
       try {
         let resolved = track;
         if (!track.videoId) {
-          setActiveDownload({ id: oid, title: track.title, progress: 15 });
+          bumpProgress(setActiveDownload, oid, { progress: 12, phase: 'Buscando canción…' });
           resolved = await resolveForPlayback(track, [], { compat: true });
         }
 
-        setActiveDownload({ id: oid, title: track.title, progress: 35 });
+        bumpProgress(setActiveDownload, oid, { progress: 28, phase: 'Obteniendo audio…' });
         const stream = await resolveAudioStream(
           resolved.videoId,
           resolved.alternateVideoIds || [],
         );
 
-        setActiveDownload({ id: oid, title: track.title, progress: 55 });
+        bumpProgress(setActiveDownload, oid, { progress: 42, phase: 'Descargando archivo…' });
+        startProgressPulse(oid, 42, 88);
+
         const downloadUrl = isNativePlayback()
           ? getProxiedStreamUrl(stream.url)
           : stream.url;
         const blob = await httpGetBlob(downloadUrl, 300000);
+
+        clearProgressTimer();
+        bumpProgress(setActiveDownload, oid, { progress: 92, phase: 'Guardando en el dispositivo…' });
+
         if (!blob.size) throw new Error('Archivo vacío');
 
         await saveDownload(
@@ -77,16 +114,25 @@ export function OfflineProvider({ children }) {
           stream.videoId,
         );
 
-        setActiveDownload({ id: oid, title: track.title, progress: 100 });
+        setActiveDownload({
+          id: oid,
+          title: track.title,
+          progress: 100,
+          phase: '¡Descarga completa!',
+        });
         await refresh();
       } catch (e) {
+        clearProgressTimer();
         setActiveDownload(null);
         throw e;
       } finally {
-        setTimeout(() => setActiveDownload(null), 600);
+        clearProgressTimer();
+        setTimeout(() => {
+          setActiveDownload((prev) => (prev?.id === oid && prev?.progress === 100 ? null : prev));
+        }, 2500);
       }
     },
-    [downloadedIds, refresh],
+    [downloadedIds, refresh, startProgressPulse, clearProgressTimer],
   );
 
   const removeDownload = useCallback(

@@ -25,7 +25,7 @@ import { initAppConfig } from './api/config';
 import { getRouterBasename, isNativeApp } from './lib/platform';
 import { requestPlaybackPermissions } from './lib/backgroundPlayback';
 import UpdateChecker from './components/UpdateChecker';
-import NativeChrome from './components/NativeChrome';
+import DownloadBanner from './components/DownloadBanner';
 import './index.css';
 
 const PANEL_KEY = 'vixmusic_panel_open';
@@ -101,6 +101,7 @@ export default function App() {
       <PlayerProvider>
         <BrowserRouter basename={getRouterBasename()}>
         <div className={`app-frame${native ? ' app-frame--native' : ''}${nowPlayingView ? ' app-frame--now-playing' : ''}`}>
+          <DownloadBanner />
           <YouTubePlayerHost />
           <div className={`spotify-app ${panelOpen ? '' : 'spotify-app--panel-hidden'}`}>
             <Sidebar />
@@ -133,10 +134,10 @@ export default function App() {
               onCloseView={closeNowPlayingView}
             />
           </div>
-          <NativeChrome>
+          <div className="mobile-chrome">
             <BottomPlayer onOpenNowPlaying={openNowPlaying} />
             <MobileNav />
-          </NativeChrome>
+          </div>
         </div>
         <SettingsModal
           open={settingsOpen}

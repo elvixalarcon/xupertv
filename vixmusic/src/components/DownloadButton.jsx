@@ -38,6 +38,9 @@ export default function DownloadButton({ track, className = '' }) {
       aria-label={downloaded ? 'Quitar descarga' : 'Descargar'}
       disabled={Boolean(activeDownload && !downloaded && !busy)}
     >
+      {busy ? (
+        <span className="dl-btn__ring" aria-hidden />
+      ) : null}
       {downloaded ? (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
           <path d="M12 2a1 1 0 0 1 1 1v9.59l2.3-2.3a1 1 0 1 1 1.4 1.42l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.42l2.3 2.3V3a1 1 0 0 1 1-1zm-7 16a1 1 0 0 1 1-1h12a1 1 0 0 1 0 2H6a1 1 0 0 1-1-1z" />

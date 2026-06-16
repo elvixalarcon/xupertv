@@ -48,20 +48,38 @@ html.native-app #root {
   overflow: hidden;
 }
 
-.native-chrome {
+/* Evita botones “pegados” en Android WebView */
+html.native-app button,
+html.native-app a,
+html.native-app .mobile-nav__item,
+html.native-app .sp-btn,
+html.native-app .dl-btn {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  outline: none;
+}
+
+html.native-app button:active,
+html.native-app .mobile-nav__item:active,
+html.native-app .sp-btn:active {
+  opacity: 0.75;
+  transform: scale(0.96);
+  transition: transform 0.08s ease, opacity 0.08s ease;
+}
+
+.mobile-chrome {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 200;
-  pointer-events: none;
-  transform: translateZ(0);
-  -webkit-transform: translateZ(0);
-}
-
-.native-chrome .player-bar,
-.native-chrome .mobile-nav {
-  pointer-events: auto;
+  z-index: 180;
+  display: flex;
+  flex-direction: column;
+  background: #000;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .app-frame--native {
@@ -115,23 +133,95 @@ html.native-app #root {
 .app-frame--native .mobile-nav {
   display: flex;
   position: relative;
-  left: auto;
-  right: auto;
-  bottom: auto;
-  background: rgba(18, 18, 18, 0.96);
-  backdrop-filter: saturate(180%) blur(20px);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
-  border-top: 1px solid #282828;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-  height: calc(var(--mobile-nav-h) + env(safe-area-inset-bottom, 0px));
+  flex-shrink: 0;
+  background: transparent;
+  border-top: none;
+  padding: 0;
+  height: var(--mobile-nav-h);
 }
 
 .app-frame--native .player-bar {
   position: relative;
-  left: auto;
-  right: auto;
-  bottom: auto;
-  border-top: 1px solid #282828;
+  flex-shrink: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Toast de descarga global */
+.download-toast {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top, 0px));
+  left: 12px;
+  right: 12px;
+  z-index: 300;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(24, 24, 24, 0.97);
+  border: 1px solid rgba(29, 185, 84, 0.35);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.download-toast__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.download-toast__icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(29, 185, 84, 0.2);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.download-toast__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.download-toast__text strong {
+  font-size: 0.82rem;
+  color: var(--accent);
+}
+
+.download-toast__title {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.download-toast__pct {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.download-toast__bar {
+  height: 5px;
+  margin-top: 10px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.download-toast__fill {
+  height: 100%;
+  background: linear-gradient(90deg, #1db954, #1ed760);
+  border-radius: 999px;
+  transition: width 0.35s ease;
 }
 
 
@@ -503,7 +593,7 @@ html.native-app #root {
   background: #444;
 }
 
-/* Navegación móvil inferior */
+/* Navegación móvil inferior — estilo Spotify */
 .mobile-nav {
   display: none;
 }
@@ -514,19 +604,54 @@ html.native-app #root {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  min-height: 44px;
-  padding: 6px 4px;
-  color: var(--text-muted);
-  font-size: 0.65rem;
+  gap: 3px;
+  min-height: 48px;
+  padding: 6px 2px 4px;
+  color: var(--text-dim);
+  font-size: 0.62rem;
   font-weight: 600;
+  letter-spacing: 0.01em;
   touch-action: manipulation;
   -webkit-user-select: none;
   user-select: none;
+  background: transparent;
+  border: none;
+  position: relative;
 }
 
-.mobile-nav__item.active { color: var(--text); }
-.mobile-nav__item svg { flex-shrink: 0; }
+.mobile-nav__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.65;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.mobile-nav__item.active {
+  color: #fff;
+}
+
+.mobile-nav__item.active .mobile-nav__icon {
+  opacity: 1;
+  transform: scale(1.05);
+}
+
+.mobile-nav__item.active::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 28px;
+  height: 3px;
+  border-radius: 0 0 3px 3px;
+  background: var(--accent);
+}
+
+.mobile-nav__label {
+  line-height: 1.1;
+}
+
 
 .api-banner {
   margin: 0 24px 8px;
@@ -1352,6 +1477,20 @@ html.native-app #root {
   justify-content: center;
   color: var(--text-muted);
   flex-shrink: 0;
+  position: relative;
+}
+
+.dl-btn__ring {
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  border-top-color: transparent;
+  animation: dl-spin 0.8s linear infinite;
+}
+
+@keyframes dl-spin {
+  to { transform: rotate(360deg); }
 }
 
 .dl-btn:hover,
@@ -1360,7 +1499,13 @@ html.native-app #root {
 }
 
 .dl-btn--busy {
-  opacity: 0.5;
+  color: var(--accent);
+  animation: dl-pulse 1s ease-in-out infinite;
+}
+
+@keyframes dl-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
 }
 
 .player-bar__dl {
@@ -2335,11 +2480,11 @@ html.native-app #root {
 @media (max-width: 768px) {
   :root {
     --player-h: 100px;
-    --mobile-nav-h: 56px;
+    --mobile-nav-h: 62px;
   }
 
   .app-frame {
-    padding-bottom: calc(var(--mobile-nav-h) + env(safe-area-inset-bottom, 0px));
+    padding-bottom: 0;
   }
 
   .spotify-app {
@@ -2466,12 +2611,30 @@ html.native-app #root {
     min-height: 44px;
   }
 
+  .mobile-nav {
+    display: flex;
+    position: relative;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    z-index: auto;
+    background: transparent;
+    border-top: none;
+    padding-bottom: 0;
+    height: var(--mobile-nav-h);
+  }
+
+  .mobile-chrome {
+    display: flex;
+    flex-direction: column;
+  }
+
   .player-bar {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: calc(var(--mobile-nav-h) + env(safe-area-inset-bottom, 0px));
-    z-index: 90;
+    position: relative;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    z-index: auto;
     grid-template-columns: 1fr auto;
     grid-template-rows: auto auto;
     padding: 6px 12px;
@@ -2543,17 +2706,19 @@ html.native-app #root {
     margin-top: -9px;
   }
 
-  .mobile-nav {
-    display: flex;
+  .mobile-chrome {
     position: fixed;
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 100;
-    background: #121212;
-    border-top: 1px solid #282828;
+    z-index: 180;
+    background: #000;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
     padding-bottom: env(safe-area-inset-bottom, 0px);
-    height: calc(var(--mobile-nav-h) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .spotify-content {
+    padding-bottom: calc(var(--player-h) + var(--mobile-nav-h) + env(safe-area-inset-bottom, 0px) + 24px);
   }
 
   .modal-backdrop {
