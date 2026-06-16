@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" role="img" aria-label="VixMusic">
+  <g transform="translate(34, 34)">
+    <rect x="10" y="21" width="4.5" height="11" rx="2.2" fill="#0a0a0a"/>
+    <rect x="17.75" y="13" width="4.5" height="19" rx="2.2" fill="#0a0a0a"/>
+    <rect x="25.5" y="17" width="4.5" height="15" rx="2.2" fill="#0a0a0a"/>
+    <circle cx="31" cy="11" r="2.6" fill="#0a0a0a"/>
+    <path d="M29.2 11v6.5" stroke="#0a0a0a" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+  </g>
+</svg>

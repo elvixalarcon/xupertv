@@ -318,6 +318,50 @@ export async function fetchHomeArtists(limit = 8) {
   }));
 }
 
+/** Episodios y programas tipo podcast para la pestaña Podcasts */
+export async function fetchHomePodcasts(limit = 20) {
+  const queries = [
+    'podcast español episodio',
+    'podcast música latina',
+    'entrevista artista podcast',
+  ];
+  const seen = new Set();
+  const merged = [];
+
+  for (const q of queries) {
+    try {
+      const batch = await searchMusic(q, Math.ceil(limit / queries.length) + 4);
+      for (const t of batch) {
+        const key = t.videoId || t.id || `${t.title}|${t.artist}`;
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          merged.push({ ...tagYoutube(t), kind: 'podcast' });
+        }
+      }
+    } catch {
+      /* siguiente consulta */
+    }
+    if (merged.length >= limit) break;
+  }
+
+  return merged.slice(0, limit);
+}
+
+export function looksLikePodcast(track) {
+  const text = `${track?.title || ''} ${track?.artist || ''}`.toLowerCase();
+  if (/podcast|episodio|ep\.?\s*\d|entrevista|charla|conversaci[oó]n|talk\s*show|programa/.test(text)) {
+    return true;
+  }
+  const dur = Number(track?.duration) || 0;
+  return dur >= 1500;
+}
+
+export function filterHomeTracks(tracks, mode) {
+  if (mode === 'Todo') return tracks;
+  if (mode === 'Podcasts') return tracks.filter(looksLikePodcast);
+  return tracks.filter((t) => !looksLikePodcast(t));
+}
+
 /** Carga página de artista: metadata + canciones populares */
 export async function loadArtistPage(artistKey) {
   if (artistKey.startsWith('yt-')) {

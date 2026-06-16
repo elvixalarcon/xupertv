@@ -1,14 +1,14 @@
 {
   "android": {
-    "version": "1.3.9",
-    "versionCode": 14,
+    "version": "1.3.11",
+    "versionCode": 16,
     "url": "http://5.5.5.8/vixmusic/VixMusic-release.apk",
-    "notes": "Corrección buscador duplicado en la pantalla Buscar."
+    "notes": "Icono nuevo de la app (ecualizador VixMusic) en launcher y splash."
   },
   "ios": {
-    "version": "1.3.9",
-    "build": 14,
+    "version": "1.3.11",
+    "build": 16,
     "url": "http://5.5.5.8/vixmusic/VixMusic.ipa",
-    "notes": "Corrección buscador duplicado en la pantalla Buscar."
+    "notes": "Icono nuevo de la app en pantalla de inicio."
   }
 }

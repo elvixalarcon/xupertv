@@ -34,7 +34,7 @@ git add -A
 if git diff --staged --quiet; then
   echo "Sin cambios"
 else
-  git commit -m "VixMusic 1.3.9: quitar buscador duplicado en Buscar"
+  git commit -m "VixMusic 1.3.11: icono nuevo en launcher Android/iOS"
   git push origin main
 fi
 

@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { fetchUnifiedHome, fetchHomeArtists } from '../api/unified';
+import {
+  fetchUnifiedHome,
+  fetchHomeArtists,
+  fetchHomePodcasts,
+  filterHomeTracks,
+} from '../api/unified';
 import { vixApi } from '../api/vixApi';
 import { useAuth } from '../context/AuthContext';
 import MediaCard, { QuickPick } from '../components/MediaCard';
@@ -19,9 +24,11 @@ export default function HomeView() {
   const { isLoggedIn, user } = useAuth();
   const [tracks, setTracks] = useState([]);
   const [artists, setArtists] = useState([]);
+  const [podcasts, setPodcasts] = useState([]);
   const [recs, setRecs] = useState([]);
   const [recHint, setRecHint] = useState('');
   const [loading, setLoading] = useState(true);
+  const [podcastLoading, setPodcastLoading] = useState(false);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('Todo');
 
@@ -59,11 +66,39 @@ export default function HomeView() {
     return () => { cancelled = true; };
   }, [isLoggedIn]);
 
+  useEffect(() => {
+    if (filter !== 'Podcasts') return undefined;
+    if (podcasts.length) return undefined;
+
+    let cancelled = false;
+    (async () => {
+      setPodcastLoading(true);
+      try {
+        const items = await fetchHomePodcasts(20);
+        if (!cancelled) setPodcasts(items);
+      } catch {
+        if (!cancelled) setPodcasts([]);
+      } finally {
+        if (!cancelled) setPodcastLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [filter, podcasts.length]);
+
   if (loading) return <div className="view-loading">Cargando música…</div>;
   if (error) return <div className="view-error">{error}</div>;
 
-  const quick = tracks.slice(0, 8);
-  const rest = tracks.slice(4);
+  const musicTracks = filterHomeTracks(tracks, 'Música');
+  const inlinePodcasts = filterHomeTracks(tracks, 'Podcasts');
+  const podcastList = podcasts.length ? podcasts : inlinePodcasts;
+
+  const showMusic = filter === 'Todo' || filter === 'Música';
+  const showPodcasts = filter === 'Todo' || filter === 'Podcasts';
+  const showArtists = showMusic && artists.length > 0;
+
+  const activeTracks = filter === 'Podcasts' ? podcastList : filter === 'Música' ? musicTracks : tracks;
+  const quick = activeTracks.slice(0, 8);
+  const rest = filter === 'Podcasts' ? activeTracks.slice(8) : activeTracks.slice(4);
 
   return (
     <div className="home-view">
@@ -82,9 +117,26 @@ export default function HomeView() {
 
       <section className="home-hero">
         <h1>{getGreeting()}{user ? `, ${user.displayName}` : ''}</h1>
+        {filter === 'Música' && (
+          <p className="subtitle">Canciones, álbumes y artistas</p>
+        )}
+        {filter === 'Podcasts' && (
+          <p className="subtitle">Programas y episodios para escuchar</p>
+        )}
       </section>
 
-      {isLoggedIn && recs.length > 0 && (
+      {filter === 'Podcasts' && podcastLoading && (
+        <div className="view-loading">Cargando podcasts…</div>
+      )}
+
+      {filter === 'Podcasts' && !podcastLoading && podcastList.length === 0 && (
+        <div className="empty-library">
+          <p>No hay podcasts en este momento.</p>
+          <Link to="/buscar?q=podcast" className="btn-secondary">Buscar podcasts</Link>
+        </div>
+      )}
+
+      {showMusic && filter !== 'Podcasts' && isLoggedIn && recs.length > 0 && (
         <section className="home-section">
           <div className="section-head">
             <h2>Hecho para ti</h2>
@@ -98,15 +150,31 @@ export default function HomeView() {
         </section>
       )}
 
-      <section className="home-quick">
-        <div className="quick-grid">
-          {quick.map((t, i) => (
-            <QuickPick key={t.id} track={t} list={tracks} index={i} />
-          ))}
-        </div>
-      </section>
+      {showMusic && filter !== 'Podcasts' && quick.length > 0 && (
+        <section className="home-quick">
+          <div className="quick-grid">
+            {quick.map((t, i) => (
+              <QuickPick key={t.id} track={t} list={activeTracks} index={i} />
+            ))}
+          </div>
+        </section>
+      )}
 
-      {artists.length > 0 && (
+      {showPodcasts && filter === 'Podcasts' && podcastList.length > 0 && (
+        <section className="home-section">
+          <div className="section-head">
+            <h2>Podcasts populares</h2>
+            <Link to="/buscar?q=podcast" className="section-link">Explorar más</Link>
+          </div>
+          <div className="media-grid">
+            {podcastList.map((t, i) => (
+              <MediaCard key={`pod-${t.id}`} track={t} list={podcastList} index={i} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {showArtists && (
         <section className="home-section">
           <div className="section-head">
             <h2>Tus artistas favoritos</h2>
@@ -120,23 +188,43 @@ export default function HomeView() {
         </section>
       )}
 
-      <section className="home-section">
-        <div className="section-head"><h2>Álbumes con canciones que te gustan</h2></div>
-        <div className="media-grid">
-          {rest.map((t, i) => (
-            <MediaCard key={t.id} track={t} list={tracks} index={i + 4} />
-          ))}
-        </div>
-      </section>
+      {showMusic && filter !== 'Podcasts' && rest.length > 0 && (
+        <section className="home-section">
+          <div className="section-head"><h2>Álbumes con canciones que te gustan</h2></div>
+          <div className="media-grid">
+            {rest.map((t, i) => (
+              <MediaCard key={t.id} track={t} list={activeTracks} index={i + 4} />
+            ))}
+          </div>
+        </section>
+      )}
 
-      <section className="home-section">
-        <div className="section-head"><h2>Recientes</h2></div>
-        <div className="media-grid">
-          {tracks.map((t, i) => (
-            <MediaCard key={`all-${t.id}`} track={t} list={tracks} index={i} />
-          ))}
-        </div>
-      </section>
+      {showMusic && filter === 'Todo' && tracks.length > 0 && (
+        <section className="home-section">
+          <div className="section-head"><h2>Recientes</h2></div>
+          <div className="media-grid">
+            {tracks.map((t, i) => (
+              <MediaCard key={`all-${t.id}`} track={t} list={tracks} index={i} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {showPodcasts && filter === 'Todo' && inlinePodcasts.length > 0 && (
+        <section className="home-section">
+          <div className="section-head">
+            <h2>Podcasts</h2>
+            <button type="button" className="section-link section-link--btn" onClick={() => setFilter('Podcasts')}>
+              Ver todos
+            </button>
+          </div>
+          <div className="media-grid">
+            {inlinePodcasts.slice(0, 6).map((t, i) => (
+              <MediaCard key={`mix-pod-${t.id}`} track={t} list={inlinePodcasts} index={i} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
