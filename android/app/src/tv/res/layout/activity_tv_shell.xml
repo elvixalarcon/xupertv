@@ -118,6 +118,7 @@
         android:orientation="horizontal">
 
         <LinearLayout
+            android:id="@+id/tv_sidebar_column"
             android:layout_width="168dp"
             android:layout_height="match_parent"
             android:background="@color/tv_sidebar"
@@ -181,15 +182,24 @@
                         style="@style/TvNavItem"
                         android:nextFocusRight="@+id/tv_catalog_list"
                         android:nextFocusUp="@+id/tv_nav_movies"
-                        android:nextFocusDown="@+id/tv_nav_kids"
+                        android:nextFocusDown="@+id/tv_nav_categories"
                         android:drawablePadding="10dp"
                         android:text="SERIES" />
+
+                    <TextView
+                        android:id="@+id/tv_nav_categories"
+                        style="@style/TvNavItem"
+                        android:nextFocusRight="@+id/tv_catalog_list"
+                        android:nextFocusUp="@+id/tv_nav_series"
+                        android:nextFocusDown="@+id/tv_nav_kids"
+                        android:drawablePadding="10dp"
+                        android:text="CATEGORÍAS" />
 
                     <TextView
                         android:id="@+id/tv_nav_kids"
                         style="@style/TvNavItem"
                         android:nextFocusRight="@+id/tv_catalog_list"
-                        android:nextFocusUp="@+id/tv_nav_series"
+                        android:nextFocusUp="@+id/tv_nav_categories"
                         android:nextFocusDown="@+id/tv_nav_anime"
                         android:drawablePadding="10dp"
                         android:text="KIDS" />

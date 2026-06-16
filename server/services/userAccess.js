@@ -17,6 +17,14 @@ function permissionsFromUser(user) {
   };
 }
 
+const DEFAULT_MAX_CONNECTIONS = 5;
+
+function getMaxConnections(user) {
+  const n = parseInt(user?.max_connections, 10);
+  if (Number.isFinite(n) && n > 0) return Math.min(20, n);
+  return DEFAULT_MAX_CONNECTIONS;
+}
+
 function expiryLabel(user) {
   if (!user.expires_at) return 'Sin expiración';
   const d = new Date(user.expires_at);
@@ -41,6 +49,7 @@ function sanitizeUserPublic(user) {
     active: user.active,
     expires_at: user.expires_at || null,
     expiry_label: expiryLabel(user),
+    max_connections: getMaxConnections(user),
     ...perms
   };
 }
@@ -51,5 +60,7 @@ module.exports = {
   permissionsFromUser,
   expiryLabel,
   computeExpiresAt,
-  sanitizeUserPublic
+  sanitizeUserPublic,
+  getMaxConnections,
+  DEFAULT_MAX_CONNECTIONS
 };

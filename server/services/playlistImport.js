@@ -1,7 +1,7 @@
 const db = require('../db');
 const { syncMovieFromTmdb, syncSeriesFromTmdb } = require('./tmdbMetadata');
 const { ensureCategory } = require('./categories');
-const { serializeConfig, DEFAULT_CONFIG } = require('./channelConfig');
+const { serializeConfig, DEFAULT_CONFIG, normalizeChannelName, isUserPinned } = require('./channelConfig');
 
 function resolveUrl(base, relative) {
   if (!relative) return '';
@@ -120,11 +120,11 @@ function classifyEntry(name) {
 
 function liveCategory(name) {
   const n = name.toLowerCase();
-  if (/sport|fútbol|futbol|ecdf/.test(n)) return 'Deportes';
+  if (/sport|fútbol|futbol|ecdf|vixred\s*tv|vixredtv/.test(n)) return 'Deportes';
   if (/novelas|telemundo|estrellas|turcas/.test(n)) return 'Novelas';
   if (/cnn|\bdw\b|rt en|noticias/.test(n)) return 'Noticias';
   if (/cinemax|\bamc\b|space|golden|\bsony\b|peliculas 24|freetv|cine/.test(n)) return 'Películas';
-  if (/ecuavisa|ecuador|gamavision|teleamazonas|canal uno|telerama|asoma|oroma|puruwa|\btvc\b|\btc\b|vixred|canal 5/.test(n)) return 'Ecuador';
+  if (/ecuavisa|ecuador|gamavision|teleamazonas|canal uno|telerama|asoma|oroma|puruwa|\btvc\b|\btc\b|canal 5/.test(n)) return 'Ecuador';
   return 'Internacional';
 }
 
@@ -252,7 +252,19 @@ function mergeConfigForImport(patch) {
 
 function importLiveChannelsOnly(playlistId, playlistName, items) {
   const liveItems = filterLiveM3uItems(items);
-  db.prepare('DELETE FROM live_channels WHERE playlist_id = ?').run(playlistId);
+  const existing = db.prepare('SELECT * FROM live_channels WHERE playlist_id = ?').all(playlistId);
+  const pinnedByName = new Map();
+  for (const ch of existing) {
+    if (isUserPinned(ch)) pinnedByName.set(normalizeChannelName(ch.name), ch);
+  }
+  const pinnedIds = [...pinnedByName.values()].map((ch) => ch.id);
+  if (pinnedIds.length) {
+    const placeholders = pinnedIds.map(() => '?').join(',');
+    db.prepare(`DELETE FROM live_channels WHERE playlist_id = ? AND id NOT IN (${placeholders})`)
+      .run(playlistId, ...pinnedIds);
+  } else {
+    db.prepare('DELETE FROM live_channels WHERE playlist_id = ?').run(playlistId);
+  }
 
   const liveIns = db.prepare(`
     INSERT INTO live_channels (playlist_id, name, logo, stream_url, group_title, config)
@@ -260,8 +272,13 @@ function importLiveChannelsOnly(playlistId, playlistName, items) {
   `);
 
   let live = 0;
+  let preserved = 0;
   const run = db.transaction(() => {
     for (const item of liveItems) {
+      if (pinnedByName.has(normalizeChannelName(item.name))) {
+        preserved++;
+        continue;
+      }
       const group = item.group_title && item.group_title !== 'General'
         ? item.group_title
         : liveCategory(item.name);
@@ -279,7 +296,7 @@ function importLiveChannelsOnly(playlistId, playlistName, items) {
   });
   run();
 
-  return { live, movies: 0, series: 0, episodes: 0, skipped: items.length - liveItems.length };
+  return { live, preserved, movies: 0, series: 0, episodes: 0, skipped: items.length - liveItems.length };
 }
 
 module.exports = {

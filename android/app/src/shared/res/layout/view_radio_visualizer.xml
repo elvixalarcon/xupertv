@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<merge xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/radio_visualizer_bg"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <ImageView
+            android:id="@+id/radio_viz_logo"
+            android:layout_width="96dp"
+            android:layout_height="96dp"
+            android:contentDescription="@null"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_launcher_foreground" />
+
+        <LinearLayout
+            android:id="@+id/radio_viz_eq"
+            android:layout_width="wrap_content"
+            android:layout_height="56dp"
+            android:layout_marginTop="20dp"
+            android:gravity="bottom|center_horizontal"
+            android:orientation="horizontal">
+
+            <View
+                android:id="@+id/radio_eq_1"
+                android:layout_width="7dp"
+                android:layout_height="18dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/radio_eq_bar" />
+
+            <View
+                android:id="@+id/radio_eq_2"
+                android:layout_width="7dp"
+                android:layout_height="28dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/radio_eq_bar" />
+
+            <View
+                android:id="@+id/radio_eq_3"
+                android:layout_width="7dp"
+                android:layout_height="40dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/radio_eq_bar" />
+
+            <View
+                android:id="@+id/radio_eq_4"
+                android:layout_width="7dp"
+                android:layout_height="52dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/radio_eq_bar" />
+
+            <View
+                android:id="@+id/radio_eq_5"
+                android:layout_width="7dp"
+                android:layout_height="36dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/radio_eq_bar" />
+
+            <View
+                android:id="@+id/radio_eq_6"
+                android:layout_width="7dp"
+                android:layout_height="24dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/radio_eq_bar" />
+
+            <View
+                android:id="@+id/radio_eq_7"
+                android:layout_width="7dp"
+                android:layout_height="44dp"
+                android:background="@drawable/radio_eq_bar" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/radio_viz_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:maxLines="2"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:textColor="#E6FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+</merge>

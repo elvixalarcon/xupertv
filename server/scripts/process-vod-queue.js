@@ -10,9 +10,10 @@ const {
   resumeMovieDownload,
   hasPartialFiles,
   destBaseFromMovie,
-  findFinishedFile,
+  findFinishedFileForMovie,
   finalizeDownloadedMovie
 } = require('../services/vodYtDlp');
+const { getDownloadJob } = require('../services/vodDownloadProgress');
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -21,7 +22,6 @@ function sleep(ms) {
 function listPending() {
   const rows = db.prepare('SELECT * FROM movies WHERE COALESCE(available, 1) = 0 ORDER BY id').all();
   return rows
-    .filter((m) => extractSlugFromPath(m.video_path) || String(m.video_path).includes('pending_'))
     .sort((a, b) => {
       const pa = hasPartialFiles(destBaseFromMovie(a)) ? 0 : 1;
       const pb = hasPartialFiles(destBaseFromMovie(b)) ? 0 : 1;
@@ -49,8 +49,9 @@ async function main() {
 
     const m = pending[0];
     try {
-      const slug = extractSlugFromPath(m.video_path);
-      const finished = findFinishedFile(destBaseFromMovie(m));
+      const job = getDownloadJob(m.id) || {};
+      const slug = job.slug || extractSlugFromPath(m.video_path);
+      const finished = findFinishedFileForMovie(m, job);
       if (finished) {
         const vp = `/uploads/movies/${path.basename(finished)}`;
         await finalizeDownloadedMovie(m.id, finished, vp);

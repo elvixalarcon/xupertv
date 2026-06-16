@@ -19,6 +19,26 @@ enum VixConfig {
     }
 }
 
+enum LiveChannelPrefs {
+    private static let key = "last_live_channel_id"
+    private static let legacyKey = "vix_last_live_channel_id"
+
+    static func load() -> Int {
+        let d = UserDefaults.standard
+        var id = d.integer(forKey: key)
+        if id <= 0 {
+            id = d.integer(forKey: legacyKey)
+            if id > 0 { save(id) }
+        }
+        return id
+    }
+
+    static func save(_ id: Int) {
+        guard id > 0 else { return }
+        UserDefaults.standard.set(id, forKey: key)
+    }
+}
+
 // MARK: - Models
 
 struct LiveChannel: Identifiable, Decodable {

@@ -2,7 +2,7 @@ const { spawn, execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const db = require('../db');
-const { configFromChannel, primarySourceUrl, serializeConfig } = require('./channelConfig');
+const { configFromChannel, primarySourceUrl, serializeConfig, isDirectSourceChannel, isManualStreamChannel } = require('./channelConfig');
 
 const DATA = path.join(__dirname, '..', '..', 'data');
 const CACHE_ROOT = path.join(DATA, 'stream-cache');
@@ -19,6 +19,11 @@ const restartCooldown = new Map();
 /** @type {Map<number, Promise<unknown>>} */
 const startLocks = new Map();
 
+/** @type {Map<number, NodeJS.Timeout>} */
+const fuboRefreshTimers = new Map();
+
+const FUBO_RELAY_REFRESH_MS = 15 * 60 * 1000;
+const MAX_CONCURRENT_RELAYS = 5;
 const RELAY_RESTART_COOLDOWN_MS = 90000;
 const PLAYLIST_FRESH_MS = 45000;
 
@@ -92,11 +97,12 @@ function relayStatusLabel(status) {
   return status || '—';
 }
 
-function getRelayDashboard() {
-  syncAllCacheMetrics();
+function getRelayDashboard(opts = {}) {
+  if (!opts.lite) syncAllCacheMetrics();
   const channels = db.prepare(`
     SELECT id, name, group_title, cache_enabled, cache_status, cache_bytes, cache_started_at, config
     FROM live_channels
+    WHERE cache_enabled = 1
     ORDER BY name COLLATE NOCASE
   `).all();
 
@@ -186,9 +192,25 @@ function updateCacheRow(channelId, fields) {
   );
 }
 
-function isRelayProcessRunning(channelId) {
+function listRunningRelayChannelIds() {
+  const ids = new Set();
+  for (const [channelId, proc] of processes) {
+    if (proc && !proc.killed) ids.add(channelId);
+  }
+  try {
+    const out = execSync('pgrep -af "stream-cache/" 2>/dev/null || true', { encoding: 'utf8', timeout: 2000 });
+    for (const line of out.split('\n')) {
+      const m = line.match(/stream-cache\/(\d+)\//);
+      if (m) ids.add(parseInt(m[1], 10));
+    }
+  } catch { /* ignore */ }
+  return ids;
+}
+
+function isRelayProcessRunning(channelId, runningIds = null) {
   const proc = processes.get(channelId);
   if (proc && !proc.killed) return true;
+  if (runningIds) return runningIds.has(channelId);
   try {
     execSync(`pgrep -f "stream-cache/${channelId}/"`, { stdio: 'ignore' });
     return true;
@@ -214,6 +236,47 @@ function killOrphanRelayProcess(channelId) {
   } catch { /* ignore */ }
 }
 
+function clearFuboRefreshTimer(channelId) {
+  const t = fuboRefreshTimers.get(channelId);
+  if (t) {
+    clearInterval(t);
+    fuboRefreshTimers.delete(channelId);
+  }
+}
+
+async function rollingRefreshFuboRelay(channelId) {
+  const row = db.prepare('SELECT * FROM live_channels WHERE id = ?').get(channelId);
+  if (!row?.cache_enabled || !processes.has(channelId)) return;
+  if (isManualStreamChannel(row)) return;
+  try {
+    const ecuaplaySync = require('./ecuaplaySync');
+    if (ecuaplaySync.isEcuaplayChannel(row) || /fubo18\.com/i.test(row.stream_url || '')) {
+      console.log(`[relay] Renovación programada #${channelId} ${row.name}`);
+      clearFuboRefreshTimer(channelId);
+      stopCache(channelId);
+      const dir = channelCacheDir(channelId);
+      if (fs.existsSync(dir)) {
+        for (const f of fs.readdirSync(dir)) {
+          try { fs.unlinkSync(path.join(dir, f)); } catch { /* ignore */ }
+        }
+      }
+      await startCache(channelId);
+    }
+  } catch (err) {
+    console.warn(`[relay] Renovación #${channelId}:`, err.message || err);
+    scheduleRelayRestart(channelId, { delayMs: 3000, force: true });
+  }
+}
+
+function scheduleFuboRelayRefresh(channelId) {
+  clearFuboRefreshTimer(channelId);
+  const timer = setInterval(() => {
+    rollingRefreshFuboRelay(channelId).catch(() => {});
+  }, FUBO_RELAY_REFRESH_MS);
+  if (timer.unref) timer.unref();
+  fuboRefreshTimers.set(channelId, timer);
+}
+
 function scheduleRelayRestart(channelId, { delayMs = 3000, force = false } = {}) {
   const enabled = db.prepare('SELECT cache_enabled FROM live_channels WHERE id = ?').get(channelId)?.cache_enabled;
   if (!enabled) return;
@@ -221,10 +284,36 @@ function scheduleRelayRestart(channelId, { delayMs = 3000, force = false } = {})
   if (!force && Date.now() - last < RELAY_RESTART_COOLDOWN_MS) return;
   restartCooldown.set(channelId, Date.now());
   setTimeout(() => {
+    if (processes.size >= MAX_CONCURRENT_RELAYS) return;
     startCache(channelId).catch((err) => {
       console.warn(`[relay] reinicio canal ${channelId}:`, err.message || err);
     });
   }, delayMs);
+}
+
+function countActiveRelays() {
+  return processes.size;
+}
+
+function relayCapacityAvailable() {
+  return countActiveRelays() < MAX_CONCURRENT_RELAYS;
+}
+
+function trimExcessRelays() {
+  const running = [...processes.keys()].filter((id) => isRelayProcessRunning(id));
+  if (running.length <= MAX_CONCURRENT_RELAYS) return;
+  const scored = running.map((id) => {
+    const row = db.prepare('SELECT cache_started_at FROM live_channels WHERE id = ?').get(id);
+    const started = row?.cache_started_at ? Date.parse(row.cache_started_at) : 0;
+    return { id, started };
+  });
+  scored.sort((a, b) => a.started - b.started);
+  while (countActiveRelays() > MAX_CONCURRENT_RELAYS && scored.length) {
+    const victim = scored.shift();
+    if (!victim) break;
+    console.log(`[relay] liberando CPU — deteniendo #${victim.id}`);
+    stopCache(victim.id);
+  }
 }
 
 async function resolveRelayInput(channel) {
@@ -233,6 +322,8 @@ async function resolveRelayInput(channel) {
   const tcTelevisionSync = require('./tcTelevisionSync');
   const vixSync = require('./vixSync');
   const fastChannelsSync = require('./fastChannelsSync');
+  const ecuaplaySync = require('./ecuaplaySync');
+  const { serializeConfig } = require('./channelConfig');
 
   let source = '';
   let ua = config.advanced?.user_agent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
@@ -240,8 +331,40 @@ async function resolveRelayInput(channel) {
 
   const needsTvResolve = /stream\.php/i.test(channel.stream_url || '')
     || (config.sources || []).some((s) => tvPorInternet.isTvPorInternetSource(s) || s.resolver === 'pluto');
+  const manual = isManualStreamChannel(config);
 
   try {
+    if (!manual && ecuaplaySync.isEcuaplayChannel(channel)) {
+      const refreshed = await ecuaplaySync.refreshEcuaplayChannel(channel);
+      channel = db.prepare('SELECT * FROM live_channels WHERE id = ?').get(refreshed.id) || channel;
+      source = channel.stream_url || '';
+      referer = configFromChannel(channel).advanced?.referer || referer;
+    } else if (!manual && /fubo18\.com/i.test(channel.stream_url || '')) {
+      const playerFile = ecuaplaySync.getPlayerFile(channel);
+      const playback = await ecuaplaySync.resolvePlayerStream(playerFile, channel.name);
+      const cfg = configFromChannel(channel);
+      cfg.ecuaplay = {
+        player: `${ecuaplaySync.BASE}/${playerFile}`,
+        stream: playback.slug || '',
+        resolver: playback.resolver,
+        updated_at: new Date().toISOString()
+      };
+      cfg.sources = [{
+        url: playback.url,
+        streamUrl: playback.url,
+        referer: playback.referer,
+        resolver: 'ecuaplay',
+        playerUrl: cfg.ecuaplay.player,
+        site: 'ecuaplay',
+        canal: playback.slug || ''
+      }];
+      cfg.advanced = { ...cfg.advanced, referer: playback.referer };
+      db.prepare('UPDATE live_channels SET stream_url = ?, config = ? WHERE id = ?')
+        .run(playback.url, serializeConfig(cfg), channel.id);
+      channel = db.prepare('SELECT * FROM live_channels WHERE id = ?').get(channel.id);
+      source = playback.url;
+      referer = playback.referer || referer;
+    }
     if (tcTelevisionSync.isTcTelevisionChannel(channel)) {
       const playback = await tcTelevisionSync.getChannelPlayback(channel);
       if (playback?.url) {
@@ -280,11 +403,18 @@ async function resolveRelayInput(channel) {
   };
 }
 
-function buildRelayHeaders({ ua, referer, custom = '' }) {
+function buildRelayHeaders({ ua, referer, custom = '', source = '' }) {
+  let ref = referer || 'https://tv.vixred.com/';
+  if (/fubo18\.com/i.test(source)) {
+    ref = referer || 'https://la18hd.com/';
+  }
   const headers = [
     `User-Agent: ${ua || 'Mozilla/5.0'}`,
-    `Referer: ${referer || 'https://tv.vixred.com/'}`
+    `Referer: ${ref}`
   ];
+  if (/fubo18\.com/i.test(source)) {
+    headers.push('Origin: https://la14hd.com');
+  }
   if (custom) {
     custom.split('\n').forEach((line) => {
       const t = line.trim();
@@ -294,27 +424,55 @@ function buildRelayHeaders({ ua, referer, custom = '' }) {
   return `${headers.join('\r\n')}\r\n`;
 }
 
+function needsRelayAudioRetime(source = '') {
+  return /fubo18\.com/i.test(source);
+}
+
 function spawnRelayProcess(channelId, channel, input) {
   const dir = channelCacheDir(channelId);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
   const playlist = path.join(dir, 'index.m3u8');
   const segmentPattern = path.join(dir, 'seg_%03d.ts');
-  const headerBlock = buildRelayHeaders(input);
+  const headerBlock = buildRelayHeaders({ ...input, source: input.source });
 
+  const retimeAudio = needsRelayAudioRetime(input.source);
   const args = [
     '-hide_banner', '-loglevel', 'warning',
     '-stats_period', '1',
-    '-headers', headerBlock,
-    '-i', input.source,
-    '-c', 'copy',
+    '-reconnect', '1',
+    '-reconnect_streamed', '1',
+    '-reconnect_delay_max', '5',
+    '-headers', headerBlock
+  ];
+  if (retimeAudio) {
+    args.push('-fflags', '+genpts+discardcorrupt');
+  }
+  args.push('-i', input.source);
+  if (retimeAudio) {
+    // fubo18 mono.m3u8 desincroniza audio/video con -c copy; re-codificar audio evita voz robotizada.
+    args.push(
+      '-map', '0:v:0',
+      '-map', '0:a:0?',
+      '-c:v', 'copy',
+      '-c:a', 'aac', '-ar', '48000', '-ac', '2', '-b:a', '128k',
+      '-af', 'aresample=async=1:min_hard_comp=0.100:first_pts=0',
+      '-avoid_negative_ts', 'make_zero',
+      '-max_muxing_queue_size', '4096'
+    );
+  } else {
+    args.push('-c', 'copy');
+  }
+  const hlsTime = retimeAudio ? '4' : '6';
+  const hlsListSize = retimeAudio ? '10' : '12';
+  args.push(
     '-f', 'hls',
-    '-hls_time', '6',
-    '-hls_list_size', '20',
-    '-hls_flags', 'delete_segments+append_list+omit_endlist',
+    '-hls_time', hlsTime,
+    '-hls_list_size', hlsListSize,
+    '-hls_flags', 'delete_segments+append_list+omit_endlist+independent_segments',
     '-hls_segment_filename', segmentPattern,
     playlist
-  ];
+  );
 
   const proc = spawn('ffmpeg', args, { detached: false });
   processes.set(channelId, proc);
@@ -329,6 +487,7 @@ function spawnRelayProcess(channelId, channel, input) {
   });
 
   proc.on('exit', (code) => {
+    clearFuboRefreshTimer(channelId);
     processes.delete(channelId);
     const row = db.prepare('SELECT cache_enabled FROM live_channels WHERE id = ?').get(channelId);
     if (!row?.cache_enabled) return;
@@ -358,14 +517,15 @@ function spawnRelayProcess(channelId, channel, input) {
   });
 
   setTimeout(() => syncCacheMetrics(channelId), 8000);
+  if (retimeAudio) scheduleFuboRelayRefresh(channelId);
 }
 
-function syncCacheMetrics(channelId) {
+function syncCacheMetrics(channelId, runningIds = null) {
   const dir = channelCacheDir(channelId);
   const bytes = dirSizeBytes(dir);
   const hasPlaylist = fs.existsSync(path.join(dir, 'index.m3u8'));
   const fresh = hasPlaylist && playlistIsFresh(channelId);
-  const running = isRelayProcessRunning(channelId);
+  const running = isRelayProcessRunning(channelId, runningIds);
   const enabled = !!db.prepare('SELECT cache_enabled FROM live_channels WHERE id = ?').get(channelId)?.cache_enabled;
 
   let status = 'off';
@@ -387,6 +547,7 @@ function syncCacheMetrics(channelId) {
 }
 
 function stopCache(channelId) {
+  clearFuboRefreshTimer(channelId);
   const proc = processes.get(channelId);
   if (proc) {
     try { proc.kill('SIGTERM'); } catch { /* ignore */ }
@@ -425,6 +586,13 @@ async function startCache(channelId) {
     stopCache(channelId);
     ensureCacheRoot();
 
+    trimExcessRelays();
+    if (!relayCapacityAvailable()) {
+      const err = new Error('Servidor ocupado (límite de relays)');
+      err.status = 503;
+      throw err;
+    }
+
     const input = await resolveRelayInput(channel);
     if (!input?.source) {
       const err = new Error('No hay fuente para cachear');
@@ -460,15 +628,30 @@ async function setCacheEnabled(channelId, enabled) {
   return startCache(channelId);
 }
 
-function syncAllCacheMetrics() {
-  const rows = db.prepare('SELECT id, cache_enabled FROM live_channels').all();
+let metricsSyncCache = { at: 0, result: null };
+const METRICS_SYNC_TTL_MS = 30000;
+
+function syncAllCacheMetrics(opts = {}) {
+  const force = !!opts.force;
+  const now = Date.now();
+  if (!force && metricsSyncCache.result && now - metricsSyncCache.at < METRICS_SYNC_TTL_MS) {
+    return metricsSyncCache.result;
+  }
+
+  const runningIds = listRunningRelayChannelIds();
+  const rows = db.prepare('SELECT id, cache_enabled FROM live_channels WHERE cache_enabled = 1').all();
+  const seen = new Set(rows.map((r) => r.id));
+  for (const id of runningIds) {
+    if (!seen.has(id)) rows.push({ id, cache_enabled: 1 });
+  }
+
   let totalBytes = 0;
   let active = 0;
   let down = 0;
   let enabled = 0;
 
   for (const row of rows) {
-    const m = syncCacheMetrics(row.id);
+    const m = syncCacheMetrics(row.id, runningIds);
     totalBytes += m.bytes;
     if (row.cache_enabled) {
       enabled++;
@@ -477,7 +660,9 @@ function syncAllCacheMetrics() {
     }
   }
 
-  return { totalBytes, active, down, enabled, totalMb: totalBytes / (1024 * 1024) };
+  const result = { totalBytes, active, down, enabled, totalMb: totalBytes / (1024 * 1024) };
+  metricsSyncCache = { at: now, result };
+  return result;
 }
 
 async function startAllEnabledCaches({ batchSize = 5, delayMs = 1500 } = {}) {
@@ -502,6 +687,7 @@ async function startAllEnabledCaches({ batchSize = 5, delayMs = 1500 } = {}) {
 
 function relayActiveForChannel(ch) {
   const config = configFromChannel(ch);
+  if (isDirectSourceChannel(config)) return false;
   return relayEnabled(config) || !!ch.cache_enabled;
 }
 
@@ -547,25 +733,18 @@ function stopAllCaches() {
   return { stopped: true };
 }
 
-function getCacheStats() {
-  syncAllCacheMetrics();
-  const rows = db.prepare(`
-    SELECT cache_enabled, cache_status, SUM(cache_bytes) as bytes, COUNT(*) as c
-    FROM live_channels GROUP BY cache_enabled, cache_status
-  `).all();
-
+function getCacheStats(opts = {}) {
+  if (!opts.lite) syncAllCacheMetrics();
   let enabled = 0;
   let active = 0;
   let down = 0;
   let totalBytes = 0;
 
-  db.prepare('SELECT cache_enabled, cache_status, cache_bytes FROM live_channels').all().forEach((r) => {
+  db.prepare('SELECT cache_enabled, cache_status, cache_bytes FROM live_channels WHERE cache_enabled = 1').all().forEach((r) => {
     totalBytes += r.cache_bytes || 0;
-    if (r.cache_enabled) {
-      enabled++;
-      if (r.cache_status === 'active') active++;
-      else if (r.cache_status !== 'off') down++;
-    }
+    enabled++;
+    if (r.cache_status === 'active') active++;
+    else if (r.cache_status !== 'off') down++;
   });
 
   return { enabled, active, down, totalBytes, totalMb: totalBytes / (1024 * 1024), formatted: formatBytes(totalBytes) };
@@ -585,12 +764,17 @@ function relayEnabled(config) {
 
 /** Allow Recording (XUI) = restream en servidor Vix TV hacia clientes */
 function syncRelayFromConfig(channelId, config) {
+  if (isDirectSourceChannel(config)) {
+    stopCache(channelId);
+    return setCacheEnabled(channelId, false);
+  }
   return setCacheEnabled(channelId, relayEnabled(config));
 }
 
 async function ensureRelayRunning(channel) {
   const config = configFromChannel(channel);
   if (!relayActiveForChannel(channel)) return false;
+  if (!relayCapacityAvailable() && !isRelayProcessRunning(channel.id)) return false;
   syncCacheMetrics(channel.id);
   const row = db.prepare('SELECT cache_status, cache_enabled FROM live_channels WHERE id = ?').get(channel.id);
   if (!row?.cache_enabled) {
@@ -609,20 +793,42 @@ async function ensureRelayRunning(channel) {
   return true;
 }
 
-function publicPlaybackUrl(ch) {
+function relayPlaybackReady(ch) {
+  if (!ch?.id || !relayActiveForChannel(ch)) return false;
+  return isRelayProcessRunning(ch.id) && playlistIsFresh(ch.id);
+}
+
+/** Deportes/fubo: seguir intentando relay aunque esté arrancando; Ecuador: URL directa si el relay no sirve. */
+function preferRelayPlayback(ch) {
+  if (!relayActiveForChannel(ch)) return false;
+  if (relayPlaybackReady(ch)) return true;
+  const group = String(ch.group_title || '').toLowerCase();
+  if (group.includes('deporte') || group.includes('sport')) return true;
+  if (/fubo18\.com/i.test(ch.stream_url || '')) return true;
+  try {
+    const ecuaplaySync = require('./ecuaplaySync');
+    if (ecuaplaySync.isEcuaplayChannel(ch)) return true;
+  } catch { /* ignore */ }
+  return false;
+}
+
+function publicPlaybackUrl(ch, opts = {}) {
   if (!relayActiveForChannel(ch)) {
     const config = configFromChannel(ch);
     return primarySourceUrl(config, ch.stream_url);
   }
-  ensureRelayRunning(ch).catch(() => {});
+  if (opts.autostart !== false) {
+    ensureRelayRunning(ch).catch(() => {});
+  }
   return `/cache/live/${ch.id}/index.m3u8`;
 }
 
 function formatChannelForApi(ch, opts = {}) {
   const config = configFromChannel(ch);
   const upstream = primarySourceUrl(config, ch.stream_url);
-  const relay = relayActiveForChannel(ch);
-  const out = { ...ch, stream_url: relay ? publicPlaybackUrl(ch) : upstream };
+  const directSource = isDirectSourceChannel(config);
+  const relay = !directSource && relayActiveForChannel(ch);
+  const out = { ...ch, stream_url: directSource ? upstream : (relay ? publicPlaybackUrl(ch) : upstream) };
   if (opts.includeUpstream) {
     out.upstream_url = upstream;
     out.relay_enabled = relay;
@@ -638,6 +844,11 @@ function formatChannelForApi(ch, opts = {}) {
   }
   return out;
 }
+
+const relayTrimTimer = setInterval(() => {
+  try { trimExcessRelays(); } catch { /* ignore */ }
+}, 90000);
+if (relayTrimTimer.unref) relayTrimTimer.unref();
 
 module.exports = {
   CACHE_ROOT,
@@ -659,6 +870,8 @@ module.exports = {
   getLocalPlaylistPath,
   relayEnabled,
   relayActiveForChannel,
+  relayPlaybackReady,
+  preferRelayPlayback,
   setRelayForAllChannels,
   enableRelayForAllChannels,
   disableRelayForAllChannels,
@@ -666,5 +879,8 @@ module.exports = {
   ensureRelayRunning,
   publicPlaybackUrl,
   formatChannelForApi,
+  isRelayProcessRunning,
+  playlistIsFresh,
+  resolveRelayInput,
   processes
 };

@@ -149,4 +149,82 @@ async function scanSources(sources, globalOpts = {}) {
   return results;
 }
 
-module.exports = { scanSourceUrl, scanSources };
+async function analyzeStreamQuality(url, opts = {}) {
+  const scan = await scanSourceUrl(url, opts);
+  if (!scan.ok) {
+    return { ok: false, degraded: true, info: scan.info, issues: ['upstream_fail'] };
+  }
+  const issues = [];
+  const info = String(scan.info || '');
+  if (/sin audio/i.test(info)) issues.push('no_audio');
+  if (/mpeg2/i.test(info)) issues.push('mpeg2');
+  const resMatch = info.match(/(\d{3,4})x(\d{3,4})/);
+  if (resMatch) {
+    const h = parseInt(resMatch[2], 10);
+    if (h < 576) issues.push('low_resolution');
+  }
+  const degraded = issues.some((i) => ['no_audio', 'mpeg2', 'low_resolution'].includes(i));
+  return {
+    ok: !issues.includes('no_audio'),
+    degraded,
+    info: scan.info,
+    issues
+  };
+}
+
+function probeRelaySegment(channelId) {
+  const fs = require('fs');
+  const path = require('path');
+  const { execFileSync } = require('child_process');
+  const dir = path.join(__dirname, '..', '..', 'data', 'stream-cache', String(channelId));
+  try {
+    if (!fs.existsSync(dir)) return { ok: false, info: 'sin caché relay' };
+    const segs = fs.readdirSync(dir)
+      .filter((f) => /^seg_\d+\.ts$/i.test(f))
+      .map((f) => ({ f, m: fs.statSync(path.join(dir, f)).mtimeMs, s: fs.statSync(path.join(dir, f)).size }))
+      .sort((a, b) => b.m - a.m)
+      .slice(0, 4);
+    if (!segs.length) return { ok: false, info: 'sin segmentos relay' };
+
+    const smallCount = segs.filter((s) => s.s < 200000).length;
+    if (smallCount >= 2) {
+      return { ok: false, degraded: true, info: `${smallCount} segmentos pequeños recientes`, issues: ['small_segment'] };
+    }
+
+    const latest = segs.find((s) => s.s > 100000) || segs[0];
+    if (latest.s < 100000) {
+      return { ok: false, degraded: true, info: `segmento pequeño (${latest.s} B)`, issues: ['small_segment'] };
+    }
+    const out = execFileSync('ffprobe', [
+      '-hide_banner', '-v', 'error',
+      '-show_entries', 'format=duration,size:stream=codec_name,codec_type,width,height,sample_rate,channels',
+      '-of', 'json',
+      path.join(dir, latest.f)
+    ], { encoding: 'utf8', timeout: 12000 });
+    const data = JSON.parse(out || '{}');
+    const streams = data.streams || [];
+    const video = streams.find((s) => s.codec_type === 'video');
+    const audio = streams.find((s) => s.codec_type === 'audio');
+    const issues = [];
+    if (!audio) issues.push('no_audio');
+    if (video?.codec_name === 'mpeg2video') issues.push('mpeg2');
+    if ((video?.height || 0) < 576) issues.push('low_resolution');
+    const dur = parseFloat(data.format?.duration || '0');
+    if (dur > 0 && dur < 2) issues.push('short_segment');
+    const parts = [];
+    if (video) parts.push(`${video.codec_name} ${video.width || '?'}x${video.height || '?'}`);
+    if (audio) parts.push(`${audio.codec_name} ${audio.sample_rate || ''}Hz`);
+    return {
+      ok: issues.length === 0,
+      degraded: issues.length > 0,
+      info: parts.join(' · ') || latest.f,
+      issues,
+      segment: latest.f,
+      bytes: latest.s
+    };
+  } catch (err) {
+    return { ok: false, degraded: true, info: err.message || 'relay probe error', issues: ['probe_error'] };
+  }
+}
+
+module.exports = { scanSourceUrl, scanSources, analyzeStreamQuality, probeRelaySegment };

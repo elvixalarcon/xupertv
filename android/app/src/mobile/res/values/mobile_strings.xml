@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="mobile_bg">#0D0D12</color>
+    <color name="mobile_card">#242424</color>
+    <color name="mobile_accent">#F2941F</color>
+    <color name="mobile_accent_12">#1FF2941F</color>
+    <color name="mobile_accent_55">#8CF2941F</color>
+    <color name="mobile_text">#FFFFFF</color>
+    <color name="mobile_muted">#A6A6A6</color>
+    <color name="mobile_error">#FF7373</color>
+    <color name="mobile_separator">#14FFFFFF</color>
+    <color name="mobile_nav">#0D0D12</color>
+
+    <style name="Theme.VixTV.Mobile" parent="Theme.MaterialComponents.NoActionBar.Bridge">
+        <item name="android:windowBackground">@color/mobile_bg</item>
+        <item name="colorPrimary">@color/mobile_accent</item>
+        <item name="colorPrimaryDark">@color/mobile_bg</item>
+        <item name="android:statusBarColor">@color/mobile_bg</item>
+        <item name="android:navigationBarColor">@color/mobile_nav</item>
+        <item name="android:textColorPrimary">@color/mobile_text</item>
+    </style>
+
+    <string name="mobile_tab_home">Inicio</string>
+    <string name="mobile_tab_live">En vivo</string>
+    <string name="mobile_tab_profile">Perfil</string>
+    <string name="mobile_chip_home">Inicio</string>
+    <string name="mobile_chip_destacados">Destacados</string>
+    <string name="mobile_chip_movies">Películas</string>
+    <string name="mobile_chip_series">Series</string>
+    <string name="mobile_chip_kids">Kids</string>
+    <string name="mobile_chip_anime">Anime</string>
+    <string name="mobile_chip_explore">Explorar</string>
+    <string name="mobile_chip_categories">Categorías</string>
+    <string name="mobile_search_hint">Buscar por título…</string>
+    <string name="mobile_loading">Cargando…</string>
+    <string name="mobile_empty">Sin contenido</string>
+    <string name="mobile_login_title">Vix TV</string>
+    <string name="mobile_login_sub">Tu entretenimiento, donde quieras</string>
+    <string name="mobile_live_title">TV en vivo</string>
+    <string name="mobile_live_all">Todos</string>
+    <string name="mobile_profile_title">Perfil</string>
+    <string name="mobile_tab_favorites">Favoritos</string>
+    <string name="mobile_tab_watched">Ya miré</string>
+    <string name="mobile_tab_continue">Seguir viendo</string>
+    <string name="mobile_empty_favorites">Sin favoritos</string>
+    <string name="mobile_empty_history">Sin historial</string>
+    <string name="mobile_empty_continue">Nada pendiente</string>
+    <string name="mobile_change_password">Cambiar contraseña</string>
+    <string name="mobile_switch_profile">Cambiar perfil</string>
+    <string name="mobile_logout">Cerrar sesión</string>
+    <string name="mobile_profile_picker_title">¿Quién ve Vix TV?</string>
+    <string name="mobile_profile_picker_sub">Elige un perfil para continuar</string>
+    <string name="mobile_profile_add">Agregar</string>
+    <string name="mobile_detail_back">Volver</string>
+    <string name="mobile_detail_play">▶ Reproducir</string>
+    <string name="mobile_detail_continue">▶ Continuar viendo</string>
+    <string name="mobile_detail_trailer">▶ Tráiler</string>
+    <string name="mobile_detail_similar">Quizás te guste</string>
+    <string name="mobile_detail_similar_series">Series similares</string>
+    <string name="mobile_detail_episodes">Episodios</string>
+</resources>

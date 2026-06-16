@@ -114,13 +114,23 @@ function isPlaceholderPoster(poster) {
   return p.includes('/api/posters/cover');
 }
 
+const IMPORT_GENRE_LABELS = new Set(['cuevana', 'web', 'allcalidad', 'cinecalidad']);
+
+function isImportPlaceholderGenre(genre) {
+  const g = String(genre || '').trim();
+  if (!g) return true;
+  if (IMPORT_GENRE_LABELS.has(g.toLowerCase())) return true;
+  return ['Cuevana', 'Web', 'AllCalidad', 'Cinecalidad'].includes(g);
+}
+
 function movieNeedsTmdbSync(movie) {
   if (!movie) return false;
   if (isPlaceholderPoster(movie.poster)) return true;
-  if (!String(movie.description || '').trim() || String(movie.description).trim().length < 20) return true;
-  if (!movie.tmdb_id) return true;
-  const genre = String(movie.genre || '').trim();
-  if (!genre || ['Cuevana', 'Web', 'AllCalidad'].includes(genre)) return true;
+  if (!movie.tmdb_id) {
+    if (!String(movie.description || '').trim() || String(movie.description).trim().length < 20) return true;
+    if (isImportPlaceholderGenre(movie.genre)) return true;
+    return true;
+  }
   return false;
 }
 
@@ -150,9 +160,24 @@ async function autoSyncMovieTmdbIfNeeded(movieId, opts = {}) {
   if (!row) return { skipped: true, reason: 'not_found' };
   if (!opts.force && !movieNeedsTmdbSync(row)) return { skipped: true, reason: 'complete' };
   try {
-    const searchTitle = opts.title ?? row.title;
+    let searchTitle = opts.title ?? row.title;
     const searchYear = opts.year ?? row.year;
-    const meta = await resolveMovieMeta(searchTitle, searchYear, row.tmdb_id);
+    if (row.tmdb_id) {
+      const meta = await resolveMovieMeta(searchTitle, searchYear, row.tmdb_id);
+      applyMovieTmdbToDb(movieId, meta, { fallbackTitle: searchTitle, fallbackYear: searchYear });
+      console.log(`[tmdb-auto] Película #${movieId} «${searchTitle}» sincronizada`);
+      return { ok: true, movieId };
+    }
+    const meta = await resolveMovieMeta(searchTitle, searchYear, null);
+    if (meta.title && searchTitle.length > 8) {
+      const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const a = norm(searchTitle);
+      const b = norm(meta.title);
+      if (a.length > 6 && b.length > 6 && !a.includes(b.slice(0, 6)) && !b.includes(a.slice(0, 6))) {
+        console.warn(`[tmdb-auto] #${movieId} TMDB «${meta.title}» no coincide con «${searchTitle}» — omitido`);
+        return { ok: false, error: 'tmdb_title_mismatch' };
+      }
+    }
     applyMovieTmdbToDb(movieId, meta, { fallbackTitle: searchTitle, fallbackYear: searchYear });
     console.log(`[tmdb-auto] Película #${movieId} «${searchTitle}» sincronizada`);
     return { ok: true, movieId };
@@ -210,12 +235,19 @@ function listMoviesNeedingTmdbSync(limit = 6) {
     SELECT * FROM movies
     WHERE COALESCE(available, 1) = 1
       AND (
-        poster IS NULL OR poster = '' OR poster LIKE '%/api/posters/cover%'
-        OR description IS NULL OR LENGTH(TRIM(COALESCE(description, ''))) < 20
-        OR tmdb_id IS NULL
-        OR TRIM(COALESCE(genre, '')) IN ('', 'Cuevana', 'Web', 'AllCalidad')
+        tmdb_id IS NULL
+        OR poster IS NULL OR poster = '' OR poster LIKE '%/api/posters/cover%'
+        OR (
+          tmdb_id IS NULL
+          AND (
+            description IS NULL OR LENGTH(TRIM(COALESCE(description, ''))) < 20
+            OR TRIM(COALESCE(genre, '')) IN ('', 'Cuevana', 'Web', 'AllCalidad', 'Cinecalidad')
+          )
+        )
       )
-    ORDER BY id DESC
+    ORDER BY
+      CASE WHEN tmdb_id IS NULL THEN 0 ELSE 1 END,
+      id DESC
     LIMIT ?
   `).all(limit);
 }
@@ -225,7 +257,7 @@ async function syncMoviesNeedingTmdbBatch(limit = 4) {
   const rows = listMoviesNeedingTmdbSync(limit);
   let synced = 0;
   for (const m of rows) {
-    const r = await autoSyncMovieTmdbIfNeeded(m.id, { force: true });
+    const r = await autoSyncMovieTmdbIfNeeded(m.id);
     if (r.ok) synced++;
     await new Promise((resolve) => setTimeout(resolve, 320));
   }
@@ -606,6 +638,7 @@ module.exports = {
   autoSyncSeriesTmdbIfNeeded,
   autoSyncEpisodeTmdbIfNeeded,
   movieNeedsTmdbSync,
+  isImportPlaceholderGenre,
   listMoviesNeedingTmdbSync,
   syncMoviesNeedingTmdbBatch,
   refreshAllVodFromTmdb,

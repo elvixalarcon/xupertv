@@ -9,9 +9,9 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const db = require('../db');
-const { extractSlugFromPath } = require('../services/movieDedup');
+const { extractSlugFromPath, normalizeSlugForSource } = require('../services/movieDedup');
 const { resumeMovieDownload, listResumableMovies } = require('../services/vodYtDlp');
-const { isYtDlpRunning } = require('../services/vodDownloadProgress');
+const { isYtDlpRunning, getDownloadJob } = require('../services/vodDownloadProgress');
 
 function parseArgs(argv) {
   const out = { movieId: 0, slug: '', all: false, background: false };
@@ -26,8 +26,13 @@ function parseArgs(argv) {
 
 async function resumeOne(movieId, slug) {
   const movie = db.prepare('SELECT * FROM movies WHERE id = ?').get(movieId);
-  const s = slug || extractSlugFromPath(movie?.video_path);
-  return resumeMovieDownload(movieId, { slug: s });
+  const job = getDownloadJob(movieId) || {};
+  const source = job.source;
+  const s = normalizeSlugForSource(
+    slug || job.slug || extractSlugFromPath(movie?.video_path),
+    source
+  );
+  return resumeMovieDownload(movieId, { slug: s, source });
 }
 
 async function main() {

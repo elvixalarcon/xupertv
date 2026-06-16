@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="118dp"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <FrameLayout
+        android:layout_width="118dp"
+        android:layout_height="150dp"
+        android:background="@drawable/mobile_poster_bg">
+
+        <ImageView
+            android:id="@+id/mobile_poster_img"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="@null"
+            android:scaleType="centerCrop" />
+
+        <TextView
+            android:id="@+id/mobile_poster_rating"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|end"
+            android:layout_margin="6dp"
+            android:background="@drawable/mobile_rating_badge"
+            android:paddingStart="6dp"
+            android:paddingTop="2dp"
+            android:paddingEnd="6dp"
+            android:paddingBottom="2dp"
+            android:textColor="@color/mobile_text"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+        <FrameLayout
+            android:id="@+id/mobile_poster_progress_bar"
+            android:layout_width="match_parent"
+            android:layout_height="4dp"
+            android:layout_gravity="bottom"
+            android:background="#33FFFFFF"
+            android:visibility="gone">
+
+            <View
+                android:id="@+id/mobile_poster_progress_fill"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:background="@color/mobile_accent" />
+        </FrameLayout>
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/mobile_poster_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:ellipsize="end"
+        android:maxLines="2"
+        android:textColor="@color/mobile_text"
+        android:textSize="11sp" />
+</LinearLayout>

@@ -232,6 +232,11 @@ addUserColumn('can_movies', 'ALTER TABLE users ADD COLUMN can_movies INTEGER DEF
 addUserColumn('can_series', 'ALTER TABLE users ADD COLUMN can_series INTEGER DEFAULT 1');
 addUserColumn('last_profile_id', 'ALTER TABLE users ADD COLUMN last_profile_id INTEGER DEFAULT NULL');
 addUserColumn('profile_setup_complete', 'ALTER TABLE users ADD COLUMN profile_setup_complete INTEGER DEFAULT 0');
+addUserColumn('max_connections', 'ALTER TABLE users ADD COLUMN max_connections INTEGER DEFAULT 5');
+addUserColumn('display_name', 'ALTER TABLE users ADD COLUMN display_name TEXT DEFAULT ""');
+db.prepare(`
+  UPDATE users SET max_connections = 5 WHERE max_connections IS NULL OR max_connections < 1
+`).run();
 db.prepare(`
   UPDATE users SET profile_setup_complete = 1
   WHERE COALESCE(profile_setup_complete, 0) = 0
@@ -249,8 +254,48 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_live_channels_group ON live_channels(group_title);
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS external_watch_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id INTEGER NOT NULL,
+    source TEXT NOT NULL,
+    slug TEXT NOT NULL,
+    season INTEGER NOT NULL DEFAULT 0,
+    episode INTEGER NOT NULL DEFAULT 0,
+    content_type TEXT NOT NULL,
+    title TEXT DEFAULT '',
+    poster TEXT DEFAULT '',
+    progress REAL NOT NULL DEFAULT 0,
+    duration REAL NOT NULL DEFAULT 0,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(profile_id, source, slug, season, episode),
+    FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS external_library (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id INTEGER NOT NULL,
+    source TEXT NOT NULL,
+    slug TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    list_type TEXT NOT NULL,
+    title TEXT DEFAULT '',
+    poster TEXT DEFAULT '',
+    year INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(profile_id, source, slug, content_type, list_type),
+    FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE
+  );
+`);
+
 module.exports = db;
 
-const { migrateUserDataToProfiles, dedupeMigratedProfileData } = require('./services/profiles');
-migrateUserDataToProfiles();
-dedupeMigratedProfileData();
+setImmediate(() => {
+  try {
+    const { migrateUserDataToProfiles, dedupeMigratedProfileData } = require('./services/profiles');
+    migrateUserDataToProfiles();
+    dedupeMigratedProfileData();
+  } catch (err) {
+    console.warn('[db] profile migration:', err.message || err);
+  }
+});

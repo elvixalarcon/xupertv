@@ -4,7 +4,7 @@ const https = require('https');
 const http = require('http');
 const db = require('../db');
 const { getTmdbApiKey } = require('./settings');
-const { fetchJson } = require('./posters');
+const { fetchJson, resolveMoviePoster, fetchTmdbMovieDetails, isPlaceholderPoster, absolutePosterUrl } = require('./posters');
 
 const DATA = path.join(__dirname, '..', '..', 'data');
 const BANNER_DIR = path.join(DATA, 'posters', 'banners');
@@ -164,6 +164,14 @@ function buildGradientFallbackSvg(title, year) {
 </svg>`);
 }
 
+function invalidateBannerCache(contentType, id) {
+  if (!id) return;
+  const out = bannerCachePath(contentType, id);
+  if (fs.existsSync(out)) {
+    try { fs.unlinkSync(out); } catch { /* ignore */ }
+  }
+}
+
 async function ensureBannerFile(row, contentType) {
   if (!row?.id) throw new Error('Sin id');
   fs.mkdirSync(BANNER_DIR, { recursive: true });
@@ -188,8 +196,22 @@ async function ensureBannerFile(row, contentType) {
       backdrop = `https://image.tmdb.org/t/p/w1280${images.posters[0].file_path}`;
     }
   }
-  if (!backdrop && row.poster) {
-    backdrop = row.poster.startsWith('http') ? row.poster : '';
+  if (!backdrop && getTmdbApiKey() && contentType === 'movie') {
+    try {
+      const details = await fetchTmdbMovieDetails(title, year);
+      backdrop = details.backdrop || details.poster || backdrop;
+      if (!tmdbId && details.tmdb_id) {
+        db.prepare('UPDATE movies SET tmdb_id = ? WHERE id = ?').run(details.tmdb_id, row.id);
+      }
+    } catch { /* opcional */ }
+  }
+  if (!backdrop) {
+    const resolvedPoster = await resolveMoviePoster(title, year);
+    if (resolvedPoster) backdrop = resolvedPoster;
+  }
+  if (!backdrop && row.poster && !isPlaceholderPoster(row.poster)) {
+    backdrop = absolutePosterUrl(row.poster, process.env.PUBLIC_BASE_URL || '');
+    if (!backdrop && row.poster.startsWith('http')) backdrop = row.poster;
   }
 
   const composites = [];
@@ -326,6 +348,7 @@ function startBannerWarmScheduler() {
 
 module.exports = {
   ensureBannerFile,
+  invalidateBannerCache,
   bannerUrlForItem,
   bannerCachePath,
   bannerPublicPath,

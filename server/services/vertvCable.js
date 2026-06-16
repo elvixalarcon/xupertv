@@ -135,6 +135,7 @@ async function ensureEcdfVertvSource() {
     LIMIT 1
   `).get(meta.name);
   if (!row) return { ok: false, error: 'Canal ECDF no encontrado' };
+  if (!row.enabled) return { ok: true, skipped: true, channel_id: row.id, name: row.name, reason: 'disabled' };
 
   const config = configFromChannel(row);
   const first = config.sources?.[0];

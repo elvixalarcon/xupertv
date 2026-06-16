@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/mobile_bg"
+    android:orientation="vertical">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="8dp"
+        android:text="@string/mobile_live_title"
+        android:textColor="@color/mobile_accent"
+        android:textSize="22sp"
+        android:textStyle="bold" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="12dp"
+        android:layout_marginEnd="16dp">
+
+        <androidx.media3.ui.PlayerView
+            android:id="@+id/mobile_live_player"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/mobile_card"
+            android:visibility="gone"
+            app:resize_mode="fit"
+            app:show_buffering="when_playing"
+            app:use_controller="true" />
+
+        <tv.vix.app.RadioVisualizerView
+            android:id="@+id/mobile_live_radio_viz"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone" />
+    </FrameLayout>
+
+    <HorizontalScrollView
+        android:id="@+id/mobile_live_categories_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:layout_marginTop="12dp"
+        android:clipToPadding="false"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:id="@+id/mobile_live_categories"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:gravity="center_vertical"
+            android:orientation="horizontal" />
+    </HorizontalScrollView>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/mobile_live_list"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="8dp"
+        android:layout_weight="1"
+        android:clipToPadding="false" />
+
+    <ProgressBar
+        android:id="@+id/mobile_live_loading"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:indeterminateTint="@color/mobile_accent"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/mobile_live_empty"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:text="@string/mobile_empty"
+        android:textColor="@color/mobile_muted"
+        android:visibility="gone" />
+</LinearLayout>

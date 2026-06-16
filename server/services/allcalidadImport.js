@@ -5,7 +5,7 @@ const http = require('http');
 const db = require('../db');
 const { autoSyncMovieTmdbIfNeeded } = require('./tmdbMetadata');
 const { registerDownloadJob } = require('./vodDownloadProgress');
-const { findExistingMovie, movieExists } = require('./movieDedup');
+const { findExistingMovie, movieExists, catalogFieldsForDownload } = require('./movieDedup');
 const {
   safeFilename,
   runAllcalidadDownload,
@@ -90,8 +90,9 @@ async function importMovie(slug, { download = false, recommended = true, quality
   const meta = single.data;
   const player = await fetchJson(`${FAST_API}/player?post_id=${meta._id}&_any=1`);
   const embeds = player.data?.embeds || [];
-  const goodstream = embeds.find((e) => /goodstream/i.test(e.url || ''));
-  const hls = embeds.find((e) => /hlswish|m3u8/i.test(e.url || ''));
+  const downloadable = embeds.some((e) =>
+    /goodstream|vimeos|hlswish|wishfast|filemoon/i.test(e.url || '')
+  );
 
   const title = (meta.title || meta.original_title || slug).replace(/\s*\(\d{4}\)\s*$/, '').trim();
   const yearMatch = String(meta.title || '').match(/\((\d{4})\)/);
@@ -111,15 +112,16 @@ async function importMovie(slug, { download = false, recommended = true, quality
   const fname = safeFilename(title, year);
   const logRel = logRelForMovie({ video_path, genre: 'AllCalidad' }, slug, 'allcalidad');
 
-  if (download && !goodstream?.url) {
-    throw new Error('Sin reproductor goodstream para descargar');
+  if (download && !downloadable) {
+    throw new Error('Sin reproductor descargable en AllCalidad');
   }
 
   let movieId;
   if (existing) {
+    const catalog = catalogFieldsForDownload(existing, video_path);
     db.prepare(`
       UPDATE movies SET title=?, video_path=?, year=?, recommended=?, available=? WHERE id=?
-    `).run(title, video_path, year, recommended ? 1 : 0, 0, existing.id);
+    `).run(title, catalog.video_path, year, recommended ? 1 : 0, catalog.available, existing.id);
     movieId = existing.id;
   } else {
     const r = db.prepare(`
@@ -129,10 +131,12 @@ async function importMovie(slug, { download = false, recommended = true, quality
     movieId = r.lastInsertRowid;
   }
 
-  if (download && goodstream?.url) {
+  if (download && downloadable) {
     const destBase = path.basename(fname, '.mkv');
     const { clearMovieFilesForRedownload } = require('./vodYtDlp');
-    if (existing) clearMovieFilesForRedownload(destBase, slug);
+    if (existing && catalogFieldsForDownload(existing, video_path).available === 0) {
+      clearMovieFilesForRedownload(destBase, slug);
+    }
     registerDownloadJob(movieId, {
       logFile: logRel,
       destBase,

@@ -1,8 +1,8 @@
 const db = require('../db');
 const { getTmdbApiKey } = require('./settings');
-const { fetchTmdbHeroExtras, fetchTmdbHeroExtrasByTitle } = require('./posters');
+const { fetchTmdbHeroExtras, fetchTmdbHeroExtrasByTitle, ensureMoviePoster, isPlaceholderPoster } = require('./posters');
 const { getAutoRecommendedMovies, AUTO_RECOMMENDED_MIN_RATING } = require('./catalogCategories');
-const { bannerUrlForItem } = require('./bannerArt');
+const { bannerUrlForItem, enrichHeroBanners } = require('./bannerArt');
 // fetchTmdbHeroExtras is movie-only; series hero uses poster when no TV backdrop helper exists.
 
 function sortMoviesByRating(movies) {
@@ -14,6 +14,8 @@ function canMovies(user) {
 }
 
 async function buildMovieHeroSlide(movie, stmts) {
+  const poster = await ensureMoviePoster(movie);
+  movie = { ...movie, poster };
   let trailer = (movie.trailer || '').trim();
   let backdrop = '';
 
@@ -34,7 +36,7 @@ async function buildMovieHeroSlide(movie, stmts) {
       if (extras.backdrop) backdrop = extras.backdrop;
     } catch { /* sin TMDB */ }
   }
-  if (!backdrop) backdrop = movie.poster || '';
+  if (!backdrop || isPlaceholderPoster(backdrop)) backdrop = poster;
 
   return {
     id: movie.id,
@@ -44,7 +46,7 @@ async function buildMovieHeroSlide(movie, stmts) {
     genre: movie.genre || '',
     description: movie.description || '',
     rating: movie.rating || null,
-    poster: movie.poster || '',
+    poster,
     backdrop,
     banner: bannerUrlForItem({ id: movie.id, content_type: 'movie' }),
     trailer
@@ -59,8 +61,9 @@ async function enrichMoviesHeroBackdrops(movies) {
     updateTmdbIdMovie: db.prepare('UPDATE movies SET tmdb_id = ? WHERE id = ? AND tmdb_id IS NULL')
   };
   return Promise.all(movies.map(async (m) => {
-    const slide = await buildMovieHeroSlide(m, stmts);
-    return { ...m, backdrop: slide.backdrop, poster: slide.poster || m.poster, trailer: slide.trailer || m.trailer };
+    const poster = await ensureMoviePoster(m);
+    const slide = await buildMovieHeroSlide({ ...m, poster }, stmts);
+    return { ...m, backdrop: slide.backdrop, poster: slide.poster || poster, trailer: slide.trailer || m.trailer };
   }));
 }
 
@@ -68,14 +71,26 @@ async function enrichMoviesHeroBackdrops(movies) {
 async function getHeroSlides(user) {
   if (!canMovies(user)) return [];
 
+  const newest = db.prepare(`
+    SELECT * FROM movies WHERE COALESCE(available, 1) = 1
+    ORDER BY id DESC LIMIT 4
+  `).all();
+
   let movies = getAutoRecommendedMovies(20, '*');
+  const ids = new Set(movies.map((m) => m.id));
+  for (const m of newest) {
+    if (!ids.has(m.id)) {
+      movies.unshift(m);
+      ids.add(m.id);
+    }
+  }
+
   if (movies.length < 6) {
     const extra = db.prepare(`
       SELECT * FROM movies WHERE COALESCE(available, 1) = 1
         AND COALESCE(rating, 0) > 0 AND COALESCE(rating, 0) < ?
-      ORDER BY rating DESC, created_at DESC LIMIT 12
+      ORDER BY rating DESC, id DESC LIMIT 12
     `).all(AUTO_RECOMMENDED_MIN_RATING);
-    const ids = new Set(movies.map((m) => m.id));
     for (const m of extra) {
       if (!ids.has(m.id)) {
         movies.push(m);
@@ -85,7 +100,7 @@ async function getHeroSlides(user) {
     }
   }
 
-  movies = sortMoviesByRating(movies).slice(0, 10);
+  movies = [...newest, ...sortMoviesByRating(movies.filter((m) => !newest.some((n) => n.id === m.id)))].slice(0, 10);
 
   const stmts = {
     updateTrailerMovie: db.prepare("UPDATE movies SET trailer = ? WHERE id = ? AND (trailer IS NULL OR trailer = '')"),
@@ -93,7 +108,12 @@ async function getHeroSlides(user) {
   };
 
   const slides = await Promise.all(movies.map((m) => buildMovieHeroSlide(m, stmts)));
-  return slides.filter((s) => s.backdrop || s.poster);
+  const filtered = slides.filter((s) => s.backdrop || s.poster);
+  try {
+    return await enrichHeroBanners(filtered);
+  } catch {
+    return filtered;
+  }
 }
 
 async function getSeriesHeroSlides(user) {

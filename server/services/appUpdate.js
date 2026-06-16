@@ -63,8 +63,13 @@ function readPublishedVersionsFile() {
     const json = JSON.parse(fs.readFileSync(PUBLISHED_VERSIONS_FILE, 'utf8'));
     const normalize = (entry) => {
       if (!entry) return null;
-      const versionCode = parseInt(entry.versionCode ?? entry.version_code, 10) || 0;
-      const versionName = String(entry.versionName ?? entry.version_name ?? '').trim();
+      const versionCode = parseInt(
+        entry.versionCode != null ? entry.versionCode : entry.version_code,
+        10
+      ) || 0;
+      const versionName = String(
+        entry.versionName != null ? entry.versionName : entry.version_name || ''
+      ).trim();
       if (versionCode <= 0) return null;
       return { versionCode, versionName };
     };
@@ -77,6 +82,21 @@ function readPublishedVersionsFile() {
   }
 }
 
+function pickNewestVersion(...candidates) {
+  let best = null;
+  for (const cur of candidates) {
+    if (!cur || !cur.versionCode) continue;
+    if (!best || cur.versionCode > best.versionCode) {
+      best = { versionCode: cur.versionCode, versionName: cur.versionName || best?.versionName || '' };
+      continue;
+    }
+    if (cur.versionCode === best.versionCode && cur.versionName) {
+      best = { versionCode: best.versionCode, versionName: cur.versionName };
+    }
+  }
+  return best;
+}
+
 /** Sincroniza versiones del panel con build.gradle / APK publicado (evita OTA silencioso). */
 function syncPublishedVersions() {
   const published = readPublishedVersionsFile();
@@ -86,8 +106,8 @@ function syncPublishedVersions() {
   const mobileApk = getApkInfo('mobile');
   const tvApk = getApkInfo('tv');
 
-  const mobileTarget = (published && published.mobile) || mobileMeta || gradle;
-  const tvTarget = (published && published.tv) || tvMeta || gradle;
+  const mobileTarget = pickNewestVersion(published?.mobile, mobileMeta, gradle);
+  const tvTarget = pickNewestVersion(published?.tv, tvMeta, gradle);
   const changed = [];
 
   if (mobileApk && mobileTarget && mobileTarget.versionCode > 0) {

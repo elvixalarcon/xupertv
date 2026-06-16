@@ -210,7 +210,7 @@ function startPlatformSyncScheduler() {
     } catch (err) {
       console.warn('[platform-sync]', err.message || err);
     }
-  }, 15000);
+  }, 300000);
 }
 
 module.exports = { syncAllPlatforms, fetchPlatformsForMovie, fetchPlatformsForSeries, startPlatformSyncScheduler };

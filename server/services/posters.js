@@ -20,6 +20,72 @@ function posterCoverUrl(title, year = '') {
   return `/api/posters/cover?${params}`;
 }
 
+function posterCoverJpegUrl(title, year = '') {
+  const params = new URLSearchParams({ title: title || 'Película', year: String(year || '') });
+  return `/api/posters/cover.jpg?${params}`;
+}
+
+function isPlaceholderPoster(poster) {
+  const p = String(poster || '').trim();
+  if (!p) return true;
+  return p.includes('/api/posters/cover');
+}
+
+function absolutePosterUrl(poster, serverBase = '') {
+  const p = String(poster || '').trim();
+  if (!p || isPlaceholderPoster(p)) return '';
+  if (p.startsWith('http://') || p.startsWith('https://')) return p;
+  if (!serverBase) return '';
+  return p.startsWith('/') ? `${serverBase}${p}` : `${serverBase}/${p}`;
+}
+
+function escapeXml(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function wrapCoverTitle(title, maxLen = 22) {
+  const words = String(title || 'Película').split(' ');
+  const lines = [];
+  let line = '';
+  for (const w of words) {
+    const next = line ? `${line} ${w}` : w;
+    if (next.length > maxLen && line) { lines.push(line); line = w; }
+    else line = next;
+  }
+  if (line) lines.push(line);
+  return lines.slice(0, 4);
+}
+
+function buildCoverSvg(title, year = '') {
+  const lines = wrapCoverTitle(title);
+  const hash = String(title || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+  const hue = hash % 360;
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="450" viewBox="0 0 300 450">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:hsl(${hue},45%,18%)"/>
+      <stop offset="100%" style="stop-color:hsl(${(hue + 40) % 360},55%,28%)"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.12"/>
+      <stop offset="100%" style="stop-color:#ffffff;stop-opacity:0"/>
+    </linearGradient>
+  </defs>
+  <rect width="300" height="450" fill="url(#bg)"/>
+  <rect width="300" height="450" fill="url(#shine)"/>
+  <rect x="20" y="20" width="260" height="410" rx="8" fill="none" stroke="#f5c518" stroke-opacity="0.25" stroke-width="2"/>
+  <text x="150" y="180" text-anchor="middle" font-family="Arial,sans-serif" font-size="48" fill="#f5c518" opacity="0.9">🎬</text>
+  ${lines.map((l, i) => `<text x="150" y="${240 + i * 32}" text-anchor="middle" font-family="Arial,sans-serif" font-size="20" font-weight="bold" fill="#ffffff">${escapeXml(l)}</text>`).join('\n  ')}
+  ${year ? `<text x="150" y="400" text-anchor="middle" font-family="Arial,sans-serif" font-size="18" fill="#f5c518" opacity="0.85">${escapeXml(year)}</text>` : ''}
+  <text x="150" y="430" text-anchor="middle" font-family="Arial,sans-serif" font-size="11" fill="#8888aa">Vix TV</text>
+</svg>`;
+}
+
 function movieSearchQueries(title) {
   const t = String(title || '').trim();
   const queries = [t];
@@ -34,7 +100,7 @@ async function searchTmdbMovie(title, year) {
   const key = getTmdbApiKey();
   if (!key) return null;
   for (const query of movieSearchQueries(title)) {
-    let url = `https://api.themoviedb.org/3/search/movie?api_key=${key}&query=${encodeURIComponent(query)}&language=es-ES`;
+    let url = `https://api.themoviedb.org/3/search/movie?api_key=${key}&query=${encodeURIComponent(query)}&language=es-MX`;
     if (year) url += `&primary_release_year=${year}`;
     const data = await fetchJson(url);
     const hit = data.results?.find(r => r.poster_path || r.backdrop_path) || data.results?.[0];
@@ -59,7 +125,7 @@ async function fetchTmdbMovieDetails(title, year) {
     const hit = await searchTmdbMovie(title, year);
     if (!hit) return {};
     const detail = await fetchJson(
-      `https://api.themoviedb.org/3/movie/${hit.id}?api_key=${key}&language=es-ES&append_to_response=credits,videos`
+      `https://api.themoviedb.org/3/movie/${hit.id}?api_key=${key}&language=es-MX&append_to_response=credits,videos`
     );
     const releaseYear = detail.release_date ? parseInt(detail.release_date.slice(0, 4), 10) : null;
     return {
@@ -85,7 +151,7 @@ async function fetchTmdbMovieById(tmdbId) {
   if (!key || !tmdbId) return {};
   try {
     const detail = await fetchJson(
-      `https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${key}&language=es-ES&append_to_response=credits,videos`
+      `https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${key}&language=es-MX&append_to_response=credits,videos`
     );
     if (!detail?.id) return {};
     const releaseYear = detail.release_date ? parseInt(detail.release_date.slice(0, 4), 10) : null;
@@ -113,7 +179,7 @@ async function fetchTmdbHeroExtras(tmdbId) {
   if (!key || !tmdbId) return { trailer: '', backdrop: '' };
   try {
     const detail = await fetchJson(
-      `https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${key}&language=es-ES&append_to_response=videos`
+      `https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${key}&language=es-MX&append_to_response=videos`
     );
     if (!detail?.id) return { trailer: '', backdrop: '' };
     return {
@@ -139,7 +205,7 @@ async function fetchTmdbSeriesTrailer(tmdbId) {
   if (!key || !tmdbId) return '';
   try {
     const detail = await fetchJson(
-      `https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${key}&language=es-ES&append_to_response=videos`
+      `https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${key}&language=es-MX&append_to_response=videos`
     );
     if (!detail?.id) return '';
     return pickYoutubeTrailer(detail.videos);
@@ -164,7 +230,7 @@ async function fetchTmdbMoviePoster(title, year) {
 async function searchTmdbSeries(title) {
   const key = getTmdbApiKey();
   if (!key) return null;
-  const url = `https://api.themoviedb.org/3/search/tv?api_key=${key}&query=${encodeURIComponent(title)}&language=es-ES`;
+  const url = `https://api.themoviedb.org/3/search/tv?api_key=${key}&query=${encodeURIComponent(title)}&language=es-MX`;
   const data = await fetchJson(url);
   return data.results?.find(r => r.poster_path || r.backdrop_path) || data.results?.[0] || null;
 }
@@ -176,7 +242,7 @@ async function fetchTmdbSeriesDetails(title) {
     const hit = await searchTmdbSeries(title);
     if (!hit) return {};
     const detail = await fetchJson(
-      `https://api.themoviedb.org/3/tv/${hit.id}?api_key=${key}&language=es-ES&append_to_response=credits,videos`
+      `https://api.themoviedb.org/3/tv/${hit.id}?api_key=${key}&language=es-MX&append_to_response=credits,videos`
     );
     const year = detail.first_air_date ? parseInt(detail.first_air_date.slice(0, 4), 10) : null;
     return {
@@ -204,7 +270,7 @@ async function fetchTmdbSeriesById(tmdbId) {
   if (!key || !tmdbId) return {};
   try {
     const detail = await fetchJson(
-      `https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${key}&language=es-ES&append_to_response=credits,videos`
+      `https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${key}&language=es-MX&append_to_response=credits,videos`
     );
     if (!detail?.id) return {};
     const year = detail.first_air_date ? parseInt(detail.first_air_date.slice(0, 4), 10) : null;
@@ -233,7 +299,7 @@ async function fetchTmdbSeasonEpisodes(tmdbId, season) {
   if (!key || !tmdbId) return {};
   try {
     const data = await fetchJson(
-      `https://api.themoviedb.org/3/tv/${tmdbId}/season/${season}?api_key=${key}&language=es-ES`
+      `https://api.themoviedb.org/3/tv/${tmdbId}/season/${season}?api_key=${key}&language=es-MX`
     );
     const map = {};
     for (const ep of data.episodes || []) {
@@ -291,13 +357,56 @@ async function resolveMoviePoster(title, year) {
 
 async function ensureMoviePoster(movie) {
   if (!movie) return '';
-  if (movie.poster) return movie.poster;
+  if (movie.poster && !isPlaceholderPoster(movie.poster)) return movie.poster;
   const poster = await resolveMoviePoster(movie.title, movie.year);
   if (poster && movie.id) {
     const db = require('../db');
     db.prepare('UPDATE movies SET poster = ? WHERE id = ?').run(poster, movie.id);
+    try {
+      const { invalidateBannerCache } = require('./bannerArt');
+      invalidateBannerCache('movie', movie.id);
+    } catch { /* opcional */ }
   }
-  return poster || posterCoverUrl(movie.title, movie.year);
+  return poster || posterCoverJpegUrl(movie.title, movie.year);
+}
+
+async function ensureSeriesPoster(series) {
+  if (!series) return '';
+  if (series.poster && !isPlaceholderPoster(series.poster)) return series.poster;
+  const poster = await resolveSeriesPoster(series.title);
+  if (poster && series.id) {
+    const db = require('../db');
+    db.prepare('UPDATE series SET poster = ? WHERE id = ?').run(poster, series.id);
+    try {
+      const { invalidateBannerCache } = require('./bannerArt');
+      invalidateBannerCache('series', series.id);
+    } catch { /* opcional */ }
+  }
+  return poster || posterCoverJpegUrl(series.title, series.year);
+}
+
+async function enrichCatalogItemPoster(item) {
+  if (!item) return item;
+  const type = item.content_type === 'series' ? 'series' : 'movie';
+  const poster = type === 'series'
+    ? await ensureSeriesPoster(item)
+    : await ensureMoviePoster(item);
+  const out = { ...item, poster };
+  if (!out.backdrop || isPlaceholderPoster(out.backdrop)) {
+    out.backdrop = poster;
+  }
+  return out;
+}
+
+async function enrichCatalogItemsPosters(items, concurrency = 6) {
+  if (!Array.isArray(items) || !items.length) return items;
+  const out = [];
+  for (let i = 0; i < items.length; i += concurrency) {
+    const batch = items.slice(i, i + concurrency);
+    const enriched = await Promise.all(batch.map((item) => enrichCatalogItemPoster(item)));
+    out.push(...enriched);
+  }
+  return out;
 }
 
 async function resolveSeriesPoster(title) {
@@ -311,6 +420,10 @@ async function resolveSeriesPoster(title) {
 module.exports = {
   fetchJson,
   posterCoverUrl,
+  posterCoverJpegUrl,
+  isPlaceholderPoster,
+  absolutePosterUrl,
+  buildCoverSvg,
   pickYoutubeTrailer,
   searchTmdbMovie,
   searchTmdbSeries,
@@ -328,5 +441,8 @@ module.exports = {
   fetchTmdbSeriesPoster,
   resolveMoviePoster,
   resolveSeriesPoster,
-  ensureMoviePoster
+  ensureMoviePoster,
+  ensureSeriesPoster,
+  enrichCatalogItemPoster,
+  enrichCatalogItemsPosters
 };

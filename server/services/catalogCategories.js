@@ -233,7 +233,7 @@ function getHomeSections(opts = {}) {
   const recent = db.prepare(`
     SELECT id, title, poster, genre, year, rating
     FROM movies WHERE COALESCE(available, 1) = 1
-    ORDER BY created_at DESC LIMIT 80
+    ORDER BY id DESC LIMIT 80
   `).all();
 
   const { filterMoviesForProfile } = require('./parental');
@@ -297,9 +297,33 @@ function getHomeSections(opts = {}) {
 
 function getCategoriesCatalog(opts = {}) {
   const limit = opts.limitPerGenre || 24;
+  const { getSagaRows } = require('./catalogSagas');
+  const sagaRows = getSagaRows({ limitPerSaga: limit });
   const movieGenres = getMovieGenreRows({ limitPerGenre: limit, minMovies: 1 });
   const seriesGenres = getSeriesGenreRows({ limitPerGenre: limit, minSeries: 1 });
   const sections = [];
+
+  if (sagaRows.length) {
+    sections.push({
+      id: 'cat-sagas-label',
+      title: 'Sagas y colecciones',
+      subtitle: 'Maratones por saga',
+      type: 'label',
+      items: []
+    });
+    for (const row of sagaRows) {
+      sections.push({
+        id: row.sectionId,
+        title: row.title,
+        subtitle: row.subtitle,
+        type: row.type,
+        saga: row.id,
+        icon: row.icon,
+        items: row.movies,
+        total: row.count
+      });
+    }
+  }
 
   if (movieGenres.length) {
     sections.push({
@@ -401,6 +425,10 @@ function getHomeSectionItems(sectionId, limit = 500, opts = {}) {
       FROM movies WHERE COALESCE(available, 1) = 1
       ORDER BY created_at DESC LIMIT ?
     `).all(cap);
+  }
+  if (id.startsWith('saga-')) {
+    const { getSagaSectionItems } = require('./catalogSagas');
+    return getSagaSectionItems(id, cap) || [];
   }
   return [];
 }

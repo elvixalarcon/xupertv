@@ -1,6 +1,12 @@
 const fs = require('fs');
 const path = require('path');
-const { listResumableMovies, hasPartialFiles, destBaseFromMovie, findFinishedFile } = require('./vodYtDlp');
+const {
+  listResumableMovies,
+  hasPartialFiles,
+  destBaseFromMovie,
+  findFinishedFileForMovie
+} = require('./vodYtDlp');
+const { getDownloadJob } = require('./vodDownloadProgress');
 const { isYtDlpRunning } = require('./vodDownloadProgress');
 const { getSetting } = require('./settings');
 const { spawn } = require('child_process');
@@ -31,7 +37,8 @@ function tick() {
   if (!downloadsAllowed()) return;
   if (resuming || isYtDlpRunning()) return;
   const list = listResumableMovies().filter((m) => {
-    if (findFinishedFile(destBaseFromMovie(m))) return false;
+    const job = getDownloadJob(m.id) || {};
+    if (findFinishedFileForMovie(m, job)) return true;
     if (!hasPartialFiles(destBaseFromMovie(m))) return false;
     return logStale(m);
   });

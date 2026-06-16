@@ -1,6 +1,12 @@
 const express = require('express');
 const db = require('../db');
 const { auth, requireProfile } = require('../middleware/auth');
+const {
+  getExternalProfileKeys,
+  getExternalListItems,
+  toggleExternalLibrary,
+  getExternalLibraryStatus
+} = require('../services/externalLibrary');
 
 const router = express.Router();
 
@@ -90,20 +96,21 @@ function getListItems(profileId, listType) {
 
 router.get('/', auth, requireProfile, (req, res) => {
   const keys = getProfileKeys(req.profileId);
+  const ext = getExternalProfileKeys(req.profileId);
   res.json({
-    watchlist: keys.watchlist,
-    likes: keys.likes,
-    watchlist_count: keys.watchlist.length,
-    likes_count: keys.likes.length
+    watchlist: [...keys.watchlist, ...ext.watchlist],
+    likes: [...keys.likes, ...ext.likes],
+    watchlist_count: keys.watchlist.length + ext.watchlist.length,
+    likes_count: keys.likes.length + ext.likes.length
   });
 });
 
 router.get('/watchlist', auth, requireProfile, (req, res) => {
-  res.json(getListItems(req.profileId, 'watchlist'));
+  res.json([...getListItems(req.profileId, 'watchlist'), ...getExternalListItems(req.profileId, 'watchlist')]);
 });
 
 router.get('/likes', auth, requireProfile, (req, res) => {
-  res.json(getListItems(req.profileId, 'like'));
+  res.json([...getListItems(req.profileId, 'like'), ...getExternalListItems(req.profileId, 'like')]);
 });
 
 router.get('/status/:type/:id', auth, requireProfile, (req, res) => {
@@ -148,6 +155,23 @@ router.post('/toggle', auth, requireProfile, (req, res) => {
 
   toggleItem.run(req.profileId, content_type, id, list_type);
   res.json({ active: true, list_type, content_type, content_id: id });
+});
+
+router.post('/external/toggle', auth, requireProfile, (req, res) => {
+  try {
+    const result = toggleExternalLibrary(req.profileId, req.body || {});
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'No se pudo actualizar la lista' });
+  }
+});
+
+router.get('/external/status/:source/:slug/:type', auth, requireProfile, (req, res) => {
+  const { source, slug, type } = req.params;
+  if (!['movie', 'series'].includes(type)) {
+    return res.status(400).json({ error: 'Tipo inválido' });
+  }
+  res.json(getExternalLibraryStatus(req.profileId, source, slug, type));
 });
 
 module.exports = router;

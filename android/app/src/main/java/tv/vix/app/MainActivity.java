@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.os.Bundle;
+import android.view.animation.DecelerateInterpolator;
 import android.view.inputmethod.InputMethodManager;
 import android.view.KeyEvent;
 import android.view.View;
@@ -36,11 +37,14 @@ import androidx.core.content.ContextCompat;
 public class MainActivity extends AppCompatActivity {
     public static final String PREFS = "vixtv_prefs";
     public static final String KEY_SERVER = "server_url";
+    private static final String KEY_WEB_CACHE_BUILD = "webview_cache_build";
     private static final int REQ_NOTIFICATIONS = 42;
 
     private WebView webView;
     private ProgressBar progressBar;
+    private View splashPanel;
     private View errorPanel;
+    private boolean mobileRevealDone = false;
     private TextView errorText;
     private boolean errorVisible = false;
     private boolean pageReady = false;
@@ -52,6 +56,7 @@ public class MainActivity extends AppCompatActivity {
     private Button nativeLoginBtn;
     private final ExecutorService authExecutor = Executors.newSingleThreadExecutor();
     private boolean sessionInjected = false;
+    private final Runnable mobileSplashTimeout = this::forceRevealMobileSplash;
 
     @SuppressLint({"SetJavaScriptEnabled", "JavascriptInterface"})
     @Override
@@ -61,7 +66,18 @@ public class MainActivity extends AppCompatActivity {
 
         webView = findViewById(R.id.webview);
         progressBar = findViewById(R.id.progress);
+        splashPanel = findViewById(R.id.splash_panel);
         errorPanel = findViewById(R.id.error_panel);
+
+        if (BuildConfig.PLATFORM.equals("mobile")) {
+            if (splashPanel != null) {
+                splashPanel.setVisibility(View.VISIBLE);
+                splashPanel.setAlpha(1f);
+            }
+            webView.setAlpha(0f);
+            progressBar.setVisibility(View.GONE);
+            webView.postDelayed(mobileSplashTimeout, 8000);
+        }
         errorText = findViewById(R.id.error_text);
 
         findViewById(R.id.btn_retry).setOnClickListener(v -> loadApp());
@@ -85,7 +101,8 @@ public class MainActivity extends AppCompatActivity {
         if (BuildConfig.PLATFORM.equals("tv")) {
             settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
         } else {
-            settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+            settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
+            clearStaleWebCacheIfNeeded();
         }
 
         String ua = settings.getUserAgentString();
@@ -99,6 +116,10 @@ public class MainActivity extends AppCompatActivity {
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onProgressChanged(WebView view, int newProgress) {
+                if (BuildConfig.PLATFORM.equals("mobile")) {
+                    progressBar.setVisibility(View.GONE);
+                    return;
+                }
                 progressBar.setVisibility(newProgress >= 100 ? View.GONE : View.VISIBLE);
                 progressBar.setProgress(newProgress);
             }
@@ -116,9 +137,10 @@ public class MainActivity extends AppCompatActivity {
             public void onPageFinished(WebView view, String url) {
                 pageReady = true;
                 injectNativeBridge();
-                if (NativeAuth.hasToken(MainActivity.this)) {
-                    injectNativeSession();
+                if (BuildConfig.PLATFORM.equals("mobile")) {
+                    webView.postDelayed(() -> forceRevealMobileSplash(), 4500);
                 }
+                injectNativeSession();
                 if (BuildConfig.PLATFORM.equals("tv")) {
                     UpdateChecker.checkAsync(MainActivity.this);
                 }
@@ -146,6 +168,7 @@ public class MainActivity extends AppCompatActivity {
             webView.setFocusable(true);
             webView.setFocusableInTouchMode(true);
             webView.requestFocus(View.FOCUS_DOWN);
+            PlaybackScreenWake.keepOn(this, webView);
             getWindow().getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                     | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
@@ -254,13 +277,16 @@ public class MainActivity extends AppCompatActivity {
 
     private void injectNativeSessionAttempt(int attempt) {
         if (webView == null) return;
-        String token = NativeAuth.getToken(this);
-        if (token == null || token.length() < 20) return;
-        String escaped = escapeJsString(token);
+        String nativeToken = NativeAuth.getToken(this);
+        String escapedNative = escapeJsString(nativeToken != null ? nativeToken : "");
         String js = "(function(){"
-            + "try{localStorage.removeItem('xupertv_token');"
-            + "localStorage.setItem('vixtv_token','" + escaped + "');}catch(e){}"
-            + "if(typeof applyNativeSession==='function'){applyNativeSession('" + escaped + "');return true;}"
+            + "var wt='';try{wt=localStorage.getItem('vixtv_token')||'';}catch(e){}"
+            + "var nt='" + escapedNative + "';"
+            + "var use=(wt&&wt.length>20)?wt:((nt&&nt.length>20)?nt:'');"
+            + "if(!use)return false;"
+            + "try{if(use!==nt&&window.VixTvAndroid&&VixTvAndroid.saveAuthToken){VixTvAndroid.saveAuthToken(use);}}catch(e){}"
+            + "if(typeof applyNativeSession==='function'){applyNativeSession(use);return true;}"
+            + "try{localStorage.setItem('vixtv_token',use);}catch(e){}"
             + "return false;"
             + "})();";
         webView.evaluateJavascript(js, value -> {
@@ -276,14 +302,81 @@ public class MainActivity extends AppCompatActivity {
     }
 
     void onWebBootComplete() {
+        if (BuildConfig.PLATFORM.equals("mobile") && webView != null) {
+            webView.removeCallbacks(mobileSplashTimeout);
+        }
         hideNativeLogin();
+        if (!BuildConfig.PLATFORM.equals("mobile")) {
+            if (webView != null) {
+                webView.requestFocus(View.FOCUS_DOWN);
+            }
+            return;
+        }
+        revealMobileWebView();
+    }
+
+    private void revealMobileWebView() {
+        if (mobileRevealDone || webView == null) return;
+        mobileRevealDone = true;
+        webView.animate()
+            .alpha(1f)
+            .setDuration(340)
+            .setInterpolator(new DecelerateInterpolator())
+            .withEndAction(() -> webView.requestFocus(View.FOCUS_DOWN))
+            .start();
+        if (splashPanel != null && splashPanel.getVisibility() == View.VISIBLE) {
+            splashPanel.animate()
+                .alpha(0f)
+                .setDuration(300)
+                .setInterpolator(new DecelerateInterpolator())
+                .withEndAction(() -> {
+                    splashPanel.setVisibility(View.GONE);
+                    splashPanel.setAlpha(1f);
+                })
+                .start();
+        }
+    }
+
+    private void forceRevealMobileSplash() {
+        if (!BuildConfig.PLATFORM.equals("mobile") || mobileRevealDone) return;
+        revealMobileWebView();
         if (webView != null) {
-            webView.requestFocus(View.FOCUS_DOWN);
+            webView.evaluateJavascript(
+                "(function(){try{"
+                    + "if(typeof showScreen==='function'&&!document.getElementById('app')?.classList.contains('active')){"
+                    + "showScreen('login-screen');}"
+                + "}catch(e){}})();",
+                null
+            );
         }
     }
 
     void onWebBootFailed(String message) {
         sessionInjected = false;
+        NativeAuth.clearToken(this);
+        clearWebAuthStorage();
+        if (BuildConfig.PLATFORM.equals("mobile")) {
+            if (webView != null) {
+                webView.removeCallbacks(mobileSplashTimeout);
+            }
+            revealMobileWebView();
+            if (webView != null) {
+                webView.evaluateJavascript(
+                    "(function(){try{"
+                        + "if(typeof persistAuthToken==='function')persistAuthToken(null);"
+                        + "window.__vixBootAttempted=false;"
+                        + "if(typeof showScreen==='function')showScreen('login-screen');"
+                        + "var err=document.getElementById('login-error');"
+                        + "if(err)err.textContent="
+                        + "'" + escapeJsString(message == null || message.trim().isEmpty()
+                            ? "Sesión expirada. Ingresa de nuevo."
+                            : message.trim()) + "';"
+                    + "}catch(e){}})();",
+                    null
+                );
+            }
+            return;
+        }
         String msg = message == null || message.trim().isEmpty()
             ? "No se pudo entrar a la app"
             : message.trim();
@@ -395,6 +488,19 @@ public class MainActivity extends AppCompatActivity {
         return ServerUrlHelper.fromPrefs(getSharedPreferences(PREFS, MODE_PRIVATE));
     }
 
+    private void clearStaleWebCacheIfNeeded() {
+        SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        int lastBuild = prefs.getInt(KEY_WEB_CACHE_BUILD, 0);
+        if (lastBuild == BuildConfig.VERSION_CODE) return;
+        if (webView != null) {
+            webView.clearCache(true);
+            CookieManager.getInstance().removeAllCookies(null);
+            CookieManager.getInstance().flush();
+        }
+        NativeAuth.clearToken(this);
+        prefs.edit().putInt(KEY_WEB_CACHE_BUILD, BuildConfig.VERSION_CODE).apply();
+    }
+
     private void loadApp() {
         String base = getServerUrl();
         String url = base + "/?vix_platform=" + BuildConfig.PLATFORM
@@ -422,6 +528,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         authExecutor.shutdownNow();
+        PlaybackScreenWake.release(this, webView);
         if (webView != null) {
             webView.destroy();
             webView = null;

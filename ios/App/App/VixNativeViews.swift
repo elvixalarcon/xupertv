@@ -400,6 +400,7 @@ struct LiveNativeView: View {
                     categories = c
                     channels = ch
                     loading = false
+                    restoreLastLiveChannel()
                 }
             } catch let err {
                 await MainActor.run {
@@ -430,8 +431,15 @@ struct LiveNativeView: View {
         }
     }
 
+    private func restoreLastLiveChannel() {
+        let lastId = LiveChannelPrefs.load()
+        guard lastId > 0, let ch = channels.first(where: { $0.id == lastId }) else { return }
+        playChannel(ch)
+    }
+
     private func playChannel(_ ch: LiveChannel) {
         guard let url = PlayUrls.livePlayback(server: VixConfig.serverURL, token: session.api.token, channel: ch) else { return }
+        LiveChannelPrefs.save(ch.id)
         playingChannel = ch
         playerCtrl.play(url: url)
         showPlayer = true

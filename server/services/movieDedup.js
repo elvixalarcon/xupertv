@@ -12,10 +12,7 @@ function normalizeTitle(title) {
 function slugVariants(slug) {
   const s = String(slug || '').toLowerCase().replace(/-\d{4}$/, '');
   if (!s) return [];
-  const parts = s.split('-').filter(Boolean);
-  const out = new Set([s]);
-  if (parts[0] && parts[0].length >= 4) out.add(parts[0]);
-  return [...out];
+  return [s];
 }
 
 function pathMatchesSlug(videoPath, slug) {
@@ -31,7 +28,31 @@ function pathMatchesSlug(videoPath, slug) {
 
 function extractSlugFromPath(videoPath) {
   const m = String(videoPath || '').match(/pending_([^.]+)\./i);
-  return m ? m[1] : null;
+  if (!m) return null;
+  let slug = m[1];
+  if (slug.startsWith('cinecalidad_')) slug = slug.slice('cinecalidad_'.length);
+  return slug || null;
+}
+
+/** Mantiene la película visible en inicio si ya estaba publicada (actualización de calidad). */
+function catalogFieldsForDownload(existing, pendingVideoPath) {
+  const wasPublished = existing
+    && Number(existing.available) === 1
+    && existing.video_path
+    && !String(existing.video_path).includes('pending_');
+  return {
+    video_path: wasPublished ? existing.video_path : pendingVideoPath,
+    available: wasPublished ? 1 : 0
+  };
+}
+
+function normalizeSlugForSource(slug, source) {
+  let s = String(slug || '').trim();
+  if (!s) return s;
+  if (source === 'cinecalidad' && s.startsWith('cinecalidad_')) {
+    s = s.slice('cinecalidad_'.length);
+  }
+  return s;
 }
 
 /** Busca película existente (evita duplicados por slug distinto o título TMDB). */
@@ -54,12 +75,12 @@ function findExistingMovie({ slug, title, year, tmdb_id } = {}) {
   }
 
   if (slug) {
-    for (const v of slugVariants(slug)) {
+    const base = String(slug).toLowerCase().replace(/-\d{4}$/, '');
+    if (base.length >= 10) {
       const byPath = db.prepare(`
-        SELECT * FROM movies WHERE
-          video_path LIKE ? OR video_path LIKE ? OR video_path LIKE ?
+        SELECT * FROM movies WHERE video_path LIKE ? OR video_path LIKE ?
         LIMIT 1
-      `).get(`%${v}%`, `%pending_${v}%`, `%${v.replace(/-/g, '_')}%`);
+      `).get(`%pending_${base}%`, `%${base.replace(/-/g, '_')}%`);
       if (byPath) return byPath;
     }
   }
@@ -113,6 +134,8 @@ module.exports = {
   slugVariants,
   pathMatchesSlug,
   extractSlugFromPath,
+  catalogFieldsForDownload,
+  normalizeSlugForSource,
   findExistingMovie,
   movieExists,
   deduplicateCatalog

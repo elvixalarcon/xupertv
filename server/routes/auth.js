@@ -8,14 +8,17 @@ const {
   sanitizeUserPublic,
   computeExpiresAt,
   expiryLabel,
-  permissionsFromUser
+  permissionsFromUser,
+  getMaxConnections
 } = require('../services/userAccess');
 const {
   listProfiles,
   setLastProfile,
   needsProfileSetup,
-  markProfileSetupComplete
+  markProfileSetupComplete,
+  ensureDefaultProfile
 } = require('../services/profiles');
+const { countConnectionsByUser } = require('../services/activity');
 
 const router = express.Router();
 const MIN_PASSWORD_LEN = 4;
@@ -70,18 +73,22 @@ router.post('/login', (req, res) => {
     return res.status(403).json({ error: 'Tu cuenta ha expirado. Contacta al administrador.' });
   }
   const profiles = listProfiles(user.id);
-  if (profiles.length && needsProfileSetup(user.id)) {
+  if (!profiles.length) {
+    ensureDefaultProfile(user.id, user.display_name || user.username || 'Principal');
+  }
+  const profilesAfter = listProfiles(user.id);
+  if (profilesAfter.length && needsProfileSetup(user.id)) {
     markProfileSetupComplete(user.id);
   }
-  const profileId = pickInitialProfile(user, profiles);
+  const profileId = pickInitialProfile(user, profilesAfter);
   if (profileId) setLastProfile(user.id, profileId);
   const token = issueToken(user, profileId);
-  const flags = profileFlags(user, profiles, profileId);
+  const flags = profileFlags(user, profilesAfter, profileId);
   res.json({
     token,
     user: sanitizeUserPublic(user),
-    profiles,
-    profile: profileId ? profiles.find((p) => p.id === profileId) : null,
+    profiles: profilesAfter,
+    profile: profileId ? profilesAfter.find((p) => p.id === profileId) : null,
     ...flags
   });
 });
@@ -104,7 +111,7 @@ router.post('/change-password', auth, (req, res) => {
 
 router.get('/me', auth, (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
-  const profiles = listProfiles(req.user.id);
+  const profiles = listProfiles(req.user.id, { ensureDefault: true });
   let profile = null;
   if (req.profileId) {
     profile = profiles.find((p) => p.id === req.profileId) || null;
@@ -120,16 +127,22 @@ router.get('/me', auth, (req, res) => {
 
 router.get('/users', auth, adminOnly, (req, res) => {
   const users = db.prepare(`
-    SELECT id, username, role, active, created_at, expires_at,
-           can_live, can_movies, can_series
-    FROM users ORDER BY id
+    SELECT u.id, u.username, u.role, u.active, u.created_at, u.expires_at,
+           u.can_live, u.can_movies, u.can_series, u.max_connections,
+           COALESCE(NULLIF(TRIM(u.display_name), ''),
+             (SELECT p.name FROM profiles p WHERE p.user_id = u.id ORDER BY p.id LIMIT 1),
+             '') AS display_name
+    FROM users u ORDER BY u.id
   `).all();
+  const connCounts = countConnectionsByUser();
   res.json(users.map((u) => ({
     ...u,
     expiry_label: expiryLabel(u),
     can_live: Number(u.can_live) !== 0,
     can_movies: Number(u.can_movies) !== 0,
-    can_series: Number(u.can_series) !== 0
+    can_series: Number(u.can_series) !== 0,
+    max_connections: getMaxConnections(u),
+    active_connections: connCounts.get(u.id) || 0
   })));
 });
 
@@ -141,7 +154,9 @@ router.post('/users', auth, adminOnly, (req, res) => {
     expiry = 'never',
     can_live = true,
     can_movies = true,
-    can_series = true
+    can_series = true,
+    max_connections = 5,
+    display_name = ''
   } = req.body;
   if (!username || !password) {
     return res.status(400).json({ error: 'Usuario y contraseña requeridos' });
@@ -152,9 +167,10 @@ router.post('/users', auth, adminOnly, (req, res) => {
   try {
     const hash = bcrypt.hashSync(password, 10);
     const expires_at = computeExpiresAt(expiry);
+    const maxConn = Math.min(20, Math.max(1, parseInt(max_connections, 10) || 5));
     const result = db.prepare(`
-      INSERT INTO users (username, password, role, expires_at, can_live, can_movies, can_series)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO users (username, password, role, expires_at, can_live, can_movies, can_series, max_connections, display_name, profile_setup_complete)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
     `).run(
       username,
       hash,
@@ -162,17 +178,22 @@ router.post('/users', auth, adminOnly, (req, res) => {
       expires_at,
       can_live ? 1 : 0,
       can_movies ? 1 : 0,
-      can_series ? 1 : 0
+      can_series ? 1 : 0,
+      maxConn,
+      String(display_name || '').trim().slice(0, 80)
     );
+    const userId = result.lastInsertRowid;
+    ensureDefaultProfile(userId, String(display_name || username || 'Principal').trim().slice(0, 24) || 'Principal');
     res.json({
-      id: result.lastInsertRowid,
+      id: userId,
       username,
       role,
       expires_at,
       expiry_label: expiryLabel({ expires_at }),
       can_live: !!can_live,
       can_movies: !!can_movies,
-      can_series: !!can_series
+      can_series: !!can_series,
+      max_connections: maxConn
     });
   } catch {
     res.status(400).json({ error: 'El usuario ya existe' });
@@ -200,7 +221,36 @@ router.post('/users/:id/reset-password', auth, adminOnly, (req, res) => {
 
 router.patch('/users/:id', auth, adminOnly, (req, res) => {
   const id = parseInt(req.params.id, 10);
-  const { password, active, role, expiry, can_live, can_movies, can_series } = req.body;
+  const {
+    username,
+    password,
+    active,
+    role,
+    expiry,
+    can_live,
+    can_movies,
+    can_series,
+    max_connections
+  } = req.body;
+  const displayName = req.body.display_name;
+
+  const target = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  if (!target) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+  if (username !== undefined) {
+    const next = String(username || '').trim();
+    if (!next) return res.status(400).json({ error: 'Usuario inválido' });
+    if (target.username === 'admin' && next !== 'admin') {
+      return res.status(400).json({ error: 'No se puede renombrar la cuenta admin' });
+    }
+    if (role === 'admin' && next !== 'admin') {
+      return res.status(400).json({ error: 'Solo puede existir la cuenta admin principal' });
+    }
+    const taken = db.prepare('SELECT id FROM users WHERE username = ? AND id != ?').get(next, id);
+    if (taken) return res.status(400).json({ error: 'Ese usuario ya existe' });
+    db.prepare('UPDATE users SET username = ? WHERE id = ?').run(next, id);
+  }
+
   if (password) {
     const pwErr = validateNewPassword(password);
     if (pwErr) return res.status(400).json({ error: pwErr });
@@ -226,7 +276,32 @@ router.patch('/users/:id', auth, adminOnly, (req, res) => {
   if (can_series !== undefined) {
     db.prepare('UPDATE users SET can_series = ? WHERE id = ?').run(can_series ? 1 : 0, id);
   }
-  res.json({ ok: true });
+  if (max_connections !== undefined) {
+    const maxConn = Math.min(20, Math.max(1, parseInt(max_connections, 10) || 5));
+    db.prepare('UPDATE users SET max_connections = ? WHERE id = ?').run(maxConn, id);
+  }
+  if (displayName !== undefined) {
+    db.prepare('UPDATE users SET display_name = ? WHERE id = ?')
+      .run(String(displayName || '').trim().slice(0, 80), id);
+  }
+
+  const updated = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  res.json({
+    ok: true,
+    user: {
+      id: updated.id,
+      username: updated.username,
+      display_name: updated.display_name || '',
+      role: updated.role,
+      active: updated.active,
+      expires_at: updated.expires_at,
+      expiry_label: expiryLabel(updated),
+      can_live: Number(updated.can_live) !== 0,
+      can_movies: Number(updated.can_movies) !== 0,
+      can_series: Number(updated.can_series) !== 0,
+      max_connections: getMaxConnections(updated)
+    }
+  });
 });
 
 module.exports = router;

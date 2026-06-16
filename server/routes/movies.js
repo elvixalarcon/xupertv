@@ -93,7 +93,7 @@ router.get('/recommended', auth, requireAccess('movies'), async (req, res) => {
 
 router.get('/recent', auth, requireAccess('movies'), async (req, res) => {
   try {
-    const movies = db.prepare(`${visibleMoviesSql()} ORDER BY created_at DESC LIMIT 8`).all();
+    const movies = db.prepare(`${visibleMoviesSql()} ORDER BY id DESC LIMIT 8`).all();
     const { enrichMoviesHeroBackdrops } = require('../services/heroSlides');
     res.json(await enrichMoviesHeroBackdrops(movies));
   } catch (err) {
@@ -115,6 +115,14 @@ router.get('/by-genre', auth, requireAccess('movies'), (req, res) => {
   const genre = String(req.query.genre || '').trim();
   if (!genre) return res.status(400).json({ error: 'Género requerido' });
   res.json(getMoviesByGenre(genre, limit));
+});
+
+router.get('/by-saga', auth, requireAccess('movies'), (req, res) => {
+  const { getSagaMovies } = require('../services/catalogSagas');
+  const limit = Math.min(500, Math.max(1, parseInt(req.query.limit, 10) || 500));
+  const saga = String(req.query.saga || '').trim();
+  if (!saga) return res.status(400).json({ error: 'Saga requerida' });
+  res.json(getSagaMovies(saga, limit));
 });
 
 router.get('/genre/:genreName', auth, requireAccess('movies'), (req, res) => {

@@ -50,7 +50,7 @@ async function tick() {
 
   try {
     const { syncMoviesNeedingTmdbBatch } = require('./tmdbMetadata');
-    const r = await syncMoviesNeedingTmdbBatch(3);
+    const r = await syncMoviesNeedingTmdbBatch(2);
     if (r.synced > 0) {
       console.log(`[tmdb-auto] ${r.synced} película(s) con metadatos TMDB actualizados`);
     }

@@ -96,6 +96,12 @@
             android:theme="@style/Theme.VixTV.Fullscreen" />
 
         <activity
+            android:name=".TvChangePasswordActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.VixTV.Fullscreen" />
+
+        <activity
             android:name=".TvHistoryActivity"
             android:exported="false"
             android:screenOrientation="landscape"

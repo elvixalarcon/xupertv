@@ -6,7 +6,7 @@ const db = require('../db');
 const { getSetting, setSetting } = require('./settings');
 const { ensureCategory } = require('./categories');
 const { parseM3U, importLiveChannelsOnly, filterLiveM3uItems } = require('./playlistImport');
-const { serializeConfig } = require('./channelConfig');
+const { serializeConfig, configFromChannel, primarySourceUrl, isVixredObsHls, obsHlsPlaybackPath } = require('./channelConfig');
 const xuiPanel = require('./xuiPanel');
 
 const DATA = path.join(__dirname, '..', '..', 'data');
@@ -371,7 +371,18 @@ async function importStreamsFromXuiAdmin(options = {}) {
 
   const parsed = rows.map(parseAdminStreamRow).filter((s) => s.stream_id && s.name);
   const playlistId = ensureXuiAdminPlaylist();
-  db.prepare('DELETE FROM live_channels WHERE playlist_id = ?').run(playlistId);
+  const { isUserPinned, normalizeChannelName } = require('./channelConfig');
+  const existingPinned = db.prepare('SELECT * FROM live_channels WHERE playlist_id = ?').all(playlistId)
+    .filter((ch) => isUserPinned(ch));
+  const pinnedByName = new Map(existingPinned.map((ch) => [normalizeChannelName(ch.name), ch]));
+  const pinnedIds = existingPinned.map((ch) => ch.id);
+  if (pinnedIds.length) {
+    const placeholders = pinnedIds.map(() => '?').join(',');
+    db.prepare(`DELETE FROM live_channels WHERE playlist_id = ? AND id NOT IN (${placeholders})`)
+      .run(playlistId, ...pinnedIds);
+  } else {
+    db.prepare('DELETE FROM live_channels WHERE playlist_id = ?').run(playlistId);
+  }
 
   const insert = db.prepare(`
     INSERT INTO live_channels (playlist_id, name, logo, stream_url, group_title, config, enabled)
@@ -384,6 +395,11 @@ async function importStreamsFromXuiAdmin(options = {}) {
   const details = [];
 
   for (const stream of parsed) {
+    if (pinnedByName.has(normalizeChannelName(stream.name))) {
+      skipped++;
+      details.push({ stream_id: stream.stream_id, name: stream.name, action: 'preserved', reason: 'canal fijado' });
+      continue;
+    }
     let html = '';
     try {
       html = await xuiPanel.fetchStreamViewHtml(stream.stream_id);
@@ -583,6 +599,85 @@ function saveXuiSettings(body) {
   return getXuiConfig();
 }
 
+function ensureVixredObsDirectChannels() {
+  const rows = db.prepare(`
+    SELECT id, name, stream_url, config FROM live_channels
+    WHERE stream_url LIKE '%/hls/%.m3u8%'
+       OR stream_url LIKE '%vixred.com/hls/%'
+       OR stream_url LIKE '%181.78.245.90/hls/%'
+       OR stream_url LIKE '%5.5.5.4/hls/%'
+       OR LOWER(REPLACE(REPLACE(name, ' ', ''), '.', '')) LIKE '%vixred%'
+  `).all();
+  const update = db.prepare('UPDATE live_channels SET stream_url = ?, config = ?, cache_enabled = 0 WHERE id = ?');
+  let fixed = 0;
+  for (const row of rows) {
+    const config = configFromChannel(row);
+    const upstream = primarySourceUrl(config, row.stream_url);
+    const obsPath = isVixredObsHls(upstream) ? obsHlsPlaybackPath(upstream)
+      : (isVixredObsHls(row.stream_url) ? obsHlsPlaybackPath(row.stream_url) : '');
+    if (!obsPath) continue;
+
+    let changed = false;
+    if (!config.direct_source) {
+      config.direct_source = true;
+      changed = true;
+    }
+    config.advanced = { ...config.advanced, allow_recording: false, manual_url: true };
+    if (!config.sources.length) {
+      config.sources = [{ url: obsPath, user_agent: 'Mozilla/5.0', referer: 'https://tv.vixred.com/' }];
+      changed = true;
+    } else if (config.sources[0].url !== obsPath) {
+      config.sources[0].url = obsPath;
+      if (/\.m3u8/i.test(obsPath)) config.sources[0].streamUrl = obsPath;
+      changed = true;
+    }
+    if (row.stream_url !== obsPath || changed) {
+      update.run(obsPath, serializeConfig(config), row.id);
+      fixed += 1;
+      console.log(`[live] OBS directo #${row.id} ${row.name} → ${obsPath}`);
+    }
+  }
+  return { ok: true, fixed };
+}
+
+function ensureVixredDeportesChannel() {
+  const exists = db.prepare(`
+    SELECT id FROM live_channels
+    WHERE group_title = 'Deportes'
+      AND LOWER(REPLACE(REPLACE(name, ' ', ''), '.', '')) LIKE '%vixred%'
+  `).get();
+  if (exists) return { ok: true, id: exists.id, created: false };
+
+  const src = db.prepare(`
+    SELECT * FROM live_channels
+    WHERE LOWER(REPLACE(REPLACE(name, ' ', ''), '.', '')) LIKE '%vixred%'
+    ORDER BY id LIMIT 1
+  `).get();
+  if (!src) return { ok: false, reason: 'no_source' };
+
+  const config = configFromChannel(src);
+  if (!Number(config.order)) {
+    const deportesCount = db.prepare("SELECT COUNT(*) as c FROM live_channels WHERE group_title = 'Deportes'").get().c;
+    config.order = deportesCount + 1;
+  }
+
+  const result = db.prepare(`
+    INSERT INTO live_channels (playlist_id, name, logo, stream_url, group_title, config, enabled, cache_enabled)
+    VALUES (?, ?, ?, ?, 'Deportes', ?, ?, ?)
+  `).run(
+    src.playlist_id,
+    src.name,
+    src.logo || '',
+    src.stream_url,
+    serializeConfig(config),
+    src.enabled ?? 1,
+    src.cache_enabled ?? 0
+  );
+  ensureCategory('Deportes', 'live');
+  console.log(`[live] VixredTv añadido a Deportes (#${result.lastInsertRowid})`);
+  return { ok: true, id: result.lastInsertRowid, created: true };
+}
+
 function getXuiSettingsPublic() {
   const c = getXuiConfig();
   return {
@@ -605,5 +700,7 @@ module.exports = {
   syncLogosFromXui,
   saveXuiSettings,
   getXuiSettingsPublic,
-  fetchLiveStreamsPlayerApi
+  fetchLiveStreamsPlayerApi,
+  ensureVixredDeportesChannel,
+  ensureVixredObsDirectChannels
 };

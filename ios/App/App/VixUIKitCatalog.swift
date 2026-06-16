@@ -1050,8 +1050,6 @@ final class UIKitLiveViewController: UIViewController {
     private var playingChannelId: Int?
     private let spinner = UIActivityIndicatorView(style: .large)
 
-    private static let lastLiveChannelKey = "vix_last_live_channel_id"
-
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = VixUITheme.bg
@@ -1209,7 +1207,7 @@ final class UIKitLiveViewController: UIViewController {
 
     private func playRandomChannel() {
         guard !channels.isEmpty else { return }
-        let lastId = UserDefaults.standard.integer(forKey: Self.lastLiveChannelKey)
+        let lastId = LiveChannelPrefs.load()
         if lastId > 0, let idx = channels.firstIndex(where: { $0.id == lastId }) {
             tuneChannel(channels[idx], at: idx)
             return
@@ -1221,7 +1219,7 @@ final class UIKitLiveViewController: UIViewController {
     private func tuneChannel(_ ch: LiveChannel, at index: Int) {
         guard let url = PlayUrls.livePlayback(server: VixConfig.serverURL, token: AuthSession.shared.api.token, channel: ch) else { return }
         playingChannelId = ch.id
-        UserDefaults.standard.set(ch.id, forKey: Self.lastLiveChannelKey)
+        LiveChannelPrefs.save(ch.id)
         playerVC.view.isHidden = false
         VixUIKitPlayer.attachLive(player: &livePlayer, playerVC: playerVC, url: url)
         let path = IndexPath(row: index, section: 0)

@@ -230,8 +230,14 @@ function allcalidadPosterUrl(meta) {
   const img = meta.images || {};
   const raw = img.poster || img.backdrop || meta.poster || meta.image || meta.thumbnail || '';
   if (!raw) return '';
-  if (raw.startsWith('http')) return raw;
-  return `${ALLCALIDAD_BASE}${raw.startsWith('/') ? raw : `/${raw}`}`;
+  const value = String(raw).trim();
+  if (/^https?:\/\/allcalidad\.re\/(thumbs|backdrops|logos)\//i.test(value)) {
+    return value.replace(/^https?:\/\/allcalidad\.re\//i, 'https://allcalidad.re/wp-content/uploads/');
+  }
+  if (value.startsWith('http')) return value;
+  const rel = value.startsWith('/') ? value.slice(1) : value;
+  if (rel.startsWith('wp-content/')) return `https://allcalidad.re/${rel}`;
+  return `https://allcalidad.re/wp-content/uploads/${rel}`;
 }
 
 function resultFromAllcalidad(meta, type, slug) {
@@ -633,10 +639,10 @@ async function searchTmdbCombined(query, limit = 10) {
     if (key) {
       const [movies, tv] = await Promise.all([
         fetchJson(
-          `https://api.themoviedb.org/3/search/movie?api_key=${key}&query=${encodeURIComponent(title)}&language=es-ES${year ? `&primary_release_year=${year}` : ''}`
+          `https://api.themoviedb.org/3/search/movie?api_key=${key}&query=${encodeURIComponent(title)}&language=es-MX${year ? `&primary_release_year=${year}` : ''}`
         ),
         fetchJson(
-          `https://api.themoviedb.org/3/search/tv?api_key=${key}&query=${encodeURIComponent(title)}&language=es-ES`
+          `https://api.themoviedb.org/3/search/tv?api_key=${key}&query=${encodeURIComponent(title)}&language=es-MX`
         )
       ]);
       for (const m of (movies.results || []).slice(0, 4)) {
@@ -731,41 +737,12 @@ async function enrichUrlResult(item) {
   return item;
 }
 
-function qualityLabelFromHeight(height) {
-  const h = parseInt(height, 10) || 0;
-  if (h >= 2160) return '4K';
-  if (h >= 1080) return '1080p';
-  if (h >= 720) return '720p';
-  if (h >= 480) return '480p';
-  if (h > 0) return `${h}p`;
-  return '';
-}
-
-function recommendedQualityFromHeight(height) {
-  const h = parseInt(height, 10) || 0;
-  if (h >= 1080) return '1080';
-  if (h >= 720) return '720';
-  if (h >= 480) return '480';
-  return 'max';
-}
-
-function availableQualitiesForHeight(maxH) {
-  const h = parseInt(maxH, 10) || 0;
-  const opts = [];
-  if (h >= 2160) opts.push({ value: 'max', label: 'Máxima — 4K / mejor disponible' });
-  if (h >= 1080) opts.push({ value: '1080', label: 'Full HD — 1080p' });
-  if (h >= 720) opts.push({ value: '720', label: 'HD — 720p' });
-  if (h >= 480) opts.push({ value: '480', label: 'SD — 480p' });
-  if (!opts.length) {
-    opts.push(
-      { value: 'max', label: 'Máxima — mejor disponible' },
-      { value: '1080', label: '1080p' },
-      { value: '720', label: '720p' },
-      { value: '480', label: '480p' }
-    );
-  }
-  return opts;
-}
+const {
+  heightToQualityLabel: qualityLabelFromHeight,
+  recommendedQualityFromHeight,
+  availableQualitiesForHeight,
+  buildQualityProbeResult
+} = require('./videoQuality');
 
 function isCatalogPageUrl(url, source) {
   if (!url || !/^https?:\/\//i.test(url)) return false;
@@ -794,9 +771,10 @@ async function resolveProbeUrlForItem(item) {
     } catch { /* fall through */ }
   }
   if (item.source === 'allcalidad' && item.slug) {
-    const { resolveAllcalidadUrl } = require('./vodYtDlp');
-    const r = await resolveAllcalidadUrl(item.slug, item.year || 2024);
-    if (r?.url) return { url: r.url, referer: 'https://allcalidad.re/' };
+    const { listAllcalidadStreamCandidates } = require('./vodYtDlp');
+    const candidates = await listAllcalidadStreamCandidates(item.slug, item.year || 2024);
+    const hit = candidates[0];
+    if (hit?.url) return { url: hit.url, referer: hit.referer || 'https://allcalidad.re/' };
   }
   if (item.source === 'cuevana' && item.slug) {
     const { parseMoviePage, resolveBestStream } = require('./cuevana');
@@ -829,6 +807,12 @@ async function enrichStreamQualities(results, opts = {}) {
 
   async function probeOne(item) {
     try {
+      if (item.source === 'allcalidad' && item.slug) {
+        const { probeAllcalidadQualities } = require('./vodYtDlp');
+        const probe = await probeAllcalidadQualities(item.slug, item.year || 2024);
+        Object.assign(item, probe);
+        return;
+      }
       const resolved = await resolveProbeUrlForItem(item);
       if (!resolved?.url) return;
       let probe = probeStreamMaxHeight(resolved.url, resolved.referer);
@@ -839,11 +823,8 @@ async function enrichStreamQualities(results, opts = {}) {
         probe = { ...probe, maxHeight: maxH, height: maxH };
       }
       if (!maxH) return;
-      item.stream_max_height = maxH;
+      Object.assign(item, buildQualityProbeResult(maxH, []));
       item.stream_max_width = probe.width || 0;
-      item.stream_quality_label = qualityLabelFromHeight(maxH);
-      item.recommended_quality = recommendedQualityFromHeight(maxH);
-      item.available_qualities = availableQualitiesForHeight(maxH);
     } catch (err) {
       console.warn('[vodSearch] calidad', item.title || item.slug, err.message);
     }
@@ -977,6 +958,7 @@ async function importMovieFromWebUrl(pageUrl, { download = false, title, year, r
   const cleanTitle = (title || parsed?.title || 'Película web').replace(/\s+/g, ' ').trim();
   const movieYear = year || parsed?.year || null;
 
+  const { catalogFieldsForDownload } = require('./movieDedup');
   const existing = findExistingMovie({ slug, title: cleanTitle, year: movieYear, tmdb_id: null });
   if (existing && !download) {
     return { skipped: true, id: existing.id, slug, title: cleanTitle, reason: 'ya en catálogo' };
@@ -988,9 +970,10 @@ async function importMovieFromWebUrl(pageUrl, { download = false, title, year, r
 
   let movieId;
   if (existing) {
+    const catalog = catalogFieldsForDownload(existing, video_path);
     db.prepare(`
       UPDATE movies SET title=?, video_path=?, year=?, recommended=?, available=? WHERE id=?
-    `).run(cleanTitle, video_path, movieYear, recommended ? 1 : 0, 0, existing.id);
+    `).run(cleanTitle, catalog.video_path, movieYear, recommended ? 1 : 0, catalog.available, existing.id);
     movieId = existing.id;
   } else {
     const r = db.prepare(`
@@ -1008,7 +991,9 @@ async function importMovieFromWebUrl(pageUrl, { download = false, title, year, r
 
   const destBase = path.basename(fname, '.mkv');
   const { clearMovieFilesForRedownload } = require('./vodYtDlp');
-  if (existing) clearMovieFilesForRedownload(destBase, slug);
+  if (existing && catalogFieldsForDownload(existing, video_path).available === 0) {
+    clearMovieFilesForRedownload(destBase, slug);
+  }
   registerDownloadJob(movieId, {
     logFile: logRel,
     destBase,
@@ -1138,10 +1123,50 @@ async function importVod(body = {}) {
   throw new Error(`Fuente no soportada: ${source}`);
 }
 
+/** Detecta calidades disponibles antes de descargar (buscador o reanudar). */
+async function probeVodItemQualities(opts = {}) {
+  const source = String(opts.source || '').toLowerCase();
+  const slug = String(opts.slug || '').trim();
+  const url = String(opts.url || '').trim();
+  const year = parseInt(opts.year, 10) || 0;
+
+  if (source === 'allcalidad' && slug) {
+    const { probeAllcalidadQualities } = require('./vodYtDlp');
+    return probeAllcalidadQualities(slug, year || 2024);
+  }
+
+  const item = { source, slug, url, year: year || undefined };
+  if (!slug && url) {
+    const parsed = parseUrlInput(url);
+    if (parsed) {
+      item.source = parsed.source || source;
+      item.slug = parsed.slug || slug;
+      item.type = parsed.type;
+      item.year = parsed.year || year;
+    }
+  }
+
+  const resolved = await resolveProbeUrlForItem(item);
+  if (!resolved?.url) {
+    throw new Error('No se pudo analizar el enlace para detectar calidades');
+  }
+
+  const { probeStreamMaxHeight } = require('./vodYtDlp');
+  let probe = probeStreamMaxHeight(resolved.url, resolved.referer);
+  let maxH = probe.maxHeight || 0;
+  if (!maxH && /\.m3u8/i.test(resolved.url)) {
+    const { maxHeightFromM3u8 } = require('./vimeosEmbed');
+    maxH = await maxHeightFromM3u8(resolved.url, resolved.referer);
+  }
+  if (!maxH) throw new Error('No se detectó calidad en este enlace');
+  return buildQualityProbeResult(maxH, []);
+}
+
 module.exports = {
   searchVod,
   importVod,
   importMovieFromWebUrl,
   parseUrlInput,
-  slugCandidates
+  slugCandidates,
+  probeVodItemQualities
 };

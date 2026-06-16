@@ -3,7 +3,7 @@ const db = require('../db');
 const { collectMovieUrls, parseMoviePage } = require('./cuevana');
 const { autoSyncMovieTmdbIfNeeded } = require('./tmdbMetadata');
 const { registerDownloadJob } = require('./vodDownloadProgress');
-const { findExistingMovie, movieExists } = require('./movieDedup');
+const { findExistingMovie, movieExists, catalogFieldsForDownload } = require('./movieDedup');
 const { safeFilename, logRelForMovie } = require('./vodYtDlp');
 
 async function discoverNewMovies(years = [2026, 2025, 2024], limit = 80) {
@@ -39,9 +39,10 @@ async function importMovie(slugOrUrl, { download = false, recommended = true, qu
 
   let movieId;
   if (existing) {
+    const catalog = catalogFieldsForDownload(existing, video_path);
     db.prepare(`
       UPDATE movies SET title=?, video_path=?, year=?, recommended=?, available=? WHERE id=?
-    `).run(movie.title, video_path, movie.year, recommended ? 1 : 0, 0, existing.id);
+    `).run(movie.title, catalog.video_path, movie.year, recommended ? 1 : 0, catalog.available, existing.id);
     movieId = existing.id;
   } else {
     const r = db.prepare(`
@@ -59,7 +60,9 @@ async function importMovie(slugOrUrl, { download = false, recommended = true, qu
 
   if (download) {
     const { clearMovieFilesForRedownload } = require('./vodYtDlp');
-    if (existing) clearMovieFilesForRedownload(destBase, movie.slug);
+    if (existing && catalogFieldsForDownload(existing, video_path).available === 0) {
+      clearMovieFilesForRedownload(destBase, movie.slug);
+    }
     registerDownloadJob(movieId, {
       logFile: logRel,
       destBase,

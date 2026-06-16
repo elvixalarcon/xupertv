@@ -73,18 +73,27 @@ function episodeReady(absPath) {
   }
 }
 
+const SERIES_SLUG_CACHE_MS = 30 * 60 * 1000;
+const seriesSlugCache = new Map();
+
 async function fetchSeriesBySlug(slug) {
+  const key = String(slug || '').trim();
+  const hit = seriesSlugCache.get(key);
+  if (hit && Date.now() - hit.at < SERIES_SLUG_CACHE_MS) return hit.data;
+
   const single = await fetchJson(
-    `${FAST_API}/single?post_name=${encodeURIComponent(slug)}&post_type=tvshows`
+    `${FAST_API}/single?post_name=${encodeURIComponent(key)}&post_type=tvshows`
   );
   if (single.error || !single.data) {
-    throw new Error(single.message || `Serie no encontrada: ${slug}`);
+    throw new Error(single.message || `Serie no encontrada: ${key}`);
   }
   const episodes = await fetchJson(
     `${FAST_API}/episodes?post_id=${single.data._id}&post_type=tvshows`
   );
   const list = Array.isArray(episodes.data) ? episodes.data : [];
-  return { meta: single.data, episodes: list };
+  const data = { meta: single.data, episodes: list };
+  seriesSlugCache.set(key, { at: Date.now(), data });
+  return data;
 }
 
 function findFinishedFileInDir(dir, destBase) {
@@ -140,6 +149,43 @@ async function resolveVimeosEmbedUrl(embedPageUrl) {
     throw new Error('No se encontró stream m3u8 en vimeos');
   }
   return m3u8;
+}
+
+async function fetchEpisodeEmbedCandidatesFast(episodePostId) {
+  const player = await fetchJson(`${FAST_API}/player?post_id=${episodePostId}&_any=1`);
+  const embeds = player.data?.embeds || [];
+  const out = [];
+  const seen = new Set();
+  const push = (url, type, extra = {}) => {
+    if (!url || seen.has(url)) return;
+    seen.add(url);
+    out.push({ url, type, ...extra });
+  };
+
+  const gs = embeds.find((e) => /goodstream/i.test(e.url || ''));
+  if (gs?.url) {
+    push(gs.url, 'goodstream');
+    return out;
+  }
+
+  const hls = embeds.find((e) => /hlswish|wishfast/i.test(e.url || ''));
+  if (hls?.url) {
+    push(hls.url, 'hls');
+    return out;
+  }
+
+  const vimeos = embeds.find((e) => /vimeos\.net\/embed-/i.test(e.url || ''));
+  if (vimeos?.url) {
+    try {
+      const m3u8 = await resolveVimeosEmbedUrl(vimeos.url);
+      push(m3u8, 'vimeos-hls', { referer: vimeos.url });
+      return out;
+    } catch (err) {
+      console.warn('[allcalidad-series] fast vimeos:', err.message);
+    }
+  }
+
+  return fetchEpisodeEmbedCandidates(episodePostId);
 }
 
 async function fetchEpisodeEmbedCandidates(episodePostId) {
@@ -595,6 +641,26 @@ async function resumeEpisodeDownload(episodeId, options = {}) {
   }
 }
 
+async function resolveEpisodeStreamForPlay(episodePostId, quality = '1080') {
+  const candidates = await fetchEpisodeEmbedCandidatesFast(episodePostId);
+  const { pickAllcalidadCandidate } = require('./vodYtDlp');
+  const mapped = candidates.map((c) => ({
+    type: c.type,
+    url: c.url,
+    referer: c.referer || 'https://allcalidad.re/',
+    maxHeight: /\.m3u8/i.test(c.url) ? 1080 : (c.type === 'goodstream' ? 1080 : 720),
+    host: c.type
+  }));
+  const picked = pickAllcalidadCandidate(mapped, quality) || mapped[0];
+  if (!picked?.url) throw new Error('Sin stream en episodio');
+  return {
+    url: picked.url,
+    referer: picked.referer || 'https://allcalidad.re/',
+    maxHeight: picked.maxHeight || 0,
+    type: picked.type
+  };
+}
+
 module.exports = {
   fetchSeriesBySlug,
   importSeriesFromAllcalidad,
@@ -603,5 +669,6 @@ module.exports = {
   episodePublicPath,
   listPendingEpisodes,
   finalizeEpisodeIfReady,
-  resumeEpisodeDownload
+  resumeEpisodeDownload,
+  resolveEpisodeStreamForPlay
 };

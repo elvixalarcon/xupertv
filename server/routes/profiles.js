@@ -20,7 +20,7 @@ const router = express.Router();
 const MAX_PROFILES = 5;
 
 router.get('/', auth, (req, res) => {
-  res.json(listProfiles(req.user.id));
+  res.json(listProfiles(req.user.id, { ensureDefault: true }));
 });
 
 router.post('/setup', auth, (req, res) => {

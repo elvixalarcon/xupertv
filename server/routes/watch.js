@@ -2,6 +2,14 @@ const express = require('express');
 const db = require('../db');
 const { auth, requireProfile } = require('../middleware/auth');
 const { resolvePlayablePath } = require('../services/playablePath');
+const {
+  saveExternalProgress,
+  getExternalSeriesProgress,
+  getExternalEpisodeProgress,
+  getExternalProgressMap,
+  getExternalContinueItems,
+  dedupeContinueWatchingItems
+} = require('../services/externalWatch');
 
 const router = express.Router();
 
@@ -97,7 +105,7 @@ router.get('/history', auth, requireProfile, (req, res) => {
   res.json(items);
 });
 
-router.get('/continue', auth, requireProfile, (req, res) => {
+router.get('/continue', auth, requireProfile, async (req, res) => {
   const rows = db.prepare(`
     SELECT * FROM watch_history
     WHERE profile_id = ?
@@ -107,8 +115,18 @@ router.get('/continue', auth, requireProfile, (req, res) => {
     LIMIT ?
   `).all(req.profileId, MIN_PROGRESS, COMPLETED_RATIO, MAX_ITEMS);
 
-  const items = rows.map(enrichContinueItem).filter(Boolean);
-  res.json(items);
+  const local = rows.map(enrichContinueItem).filter(Boolean);
+  const external = getExternalContinueItems(req.profileId, MAX_ITEMS);
+  let enrichedExternal = external;
+  try {
+    const { enrichExternalContinueItems } = require('../services/externalCatalog');
+    enrichedExternal = await enrichExternalContinueItems(external);
+  } catch (err) {
+    console.warn('[watch/continue] external posters:', err.message);
+  }
+  const merged = dedupeContinueWatchingItems([...local, ...enrichedExternal])
+    .slice(0, MAX_ITEMS);
+  res.json(merged);
 });
 
 router.put('/progress', auth, requireProfile, (req, res) => {
@@ -201,7 +219,8 @@ router.get('/progress-map', auth, requireProfile, (req, res) => {
       }
     }
   }
-  res.json(map);
+  const external = getExternalProgressMap(req.profileId);
+  res.json({ ...map, ...external });
 });
 
 router.get('/progress/:type/:id', auth, requireProfile, (req, res) => {
@@ -223,6 +242,27 @@ router.delete('/progress/:type/:id', auth, requireProfile, (req, res) => {
   }
   deleteProgress.run(req.profileId, type, parseInt(id, 10));
   res.json({ ok: true });
+});
+
+router.put('/external/progress', auth, requireProfile, async (req, res) => {
+  try {
+    const result = await saveExternalProgress(req.profileId, req.body || {});
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Progreso inválido' });
+  }
+});
+
+router.get('/external/series/:source/:slug/progress', auth, requireProfile, (req, res) => {
+  const { source, slug } = req.params;
+  res.json(getExternalSeriesProgress(req.profileId, source, slug));
+});
+
+router.get('/external/episode/:source/:slug/:season/:episode/progress', auth, requireProfile, (req, res) => {
+  const { source, slug } = req.params;
+  const season = parseInt(req.params.season, 10) || 0;
+  const episode = parseInt(req.params.episode, 10) || 0;
+  res.json(getExternalEpisodeProgress(req.profileId, source, slug, season, episode));
 });
 
 module.exports = router;

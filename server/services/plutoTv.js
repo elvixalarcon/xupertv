@@ -251,18 +251,7 @@ function pickPlutoNowNext(timelines, now = new Date()) {
   return { current, next };
 }
 
-async function getChannelEpg(externalId, region = 'MX', now = new Date()) {
-  const id = String(externalId || '').trim();
-  if (!id) return null;
-
-  const cacheKey = `${String(region || 'MX').toUpperCase()}:${id}`;
-  const cached = timelineCache.get(cacheKey);
-  if (cached && Date.now() < cached.expires) {
-    return cached.entry;
-  }
-
-  const map = await fetchTimelines([id], region);
-  const timelines = map.get(id) || [];
+function buildEpgFromTimelines(timelines, now = new Date()) {
   const { current, next } = pickPlutoNowNext(timelines, now);
   if (!current && !next) return null;
 
@@ -280,7 +269,22 @@ async function getChannelEpg(externalId, region = 'MX', now = new Date()) {
     } : null,
     source: 'pluto'
   };
-  if (!entry.now) return null;
+  return entry.now ? entry : null;
+}
+
+async function getChannelEpg(externalId, region = 'MX', now = new Date()) {
+  const id = String(externalId || '').trim();
+  if (!id) return null;
+
+  const cacheKey = `${String(region || 'MX').toUpperCase()}:${id}`;
+  const cached = timelineCache.get(cacheKey);
+  if (cached && Date.now() < cached.expires) {
+    return cached.entry;
+  }
+
+  const map = await fetchTimelines([id], region);
+  const entry = buildEpgFromTimelines(map.get(id) || [], now);
+  if (!entry) return null;
 
   timelineCache.set(cacheKey, { entry, expires: Date.now() + TIMELINE_TTL_MS });
   return entry;
@@ -293,6 +297,7 @@ module.exports = {
   resolveStreamUrl,
   fetchChannels,
   fetchTimelines,
+  buildEpgFromTimelines,
   getChannelEpg,
   filterCuratedChannels,
   isCuratedPlutoChannel,

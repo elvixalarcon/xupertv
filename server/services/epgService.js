@@ -9,6 +9,8 @@ const { configFromChannel, serializeConfig } = require('./channelConfig');
 
 const CACHE_TTL_MS = 30 * 60 * 1000;
 const REFRESH_INTERVAL_MS = 30 * 60 * 1000;
+const LIVE_EPG_MAP_TTL_MS = 4 * 60 * 1000;
+let liveEpgMapCache = null;
 const PUBLIC_EPG_BASE = 'https://iptv-epg.org/files/epg';
 const LOCAL_EPG_DIR = path.join(__dirname, '..', '..', 'data', 'epg');
 
@@ -835,8 +837,7 @@ function getCacheStatus() {
   };
 }
 
-async function getLiveEpgMap({ force = false } = {}) {
-  await refreshEpg({ force });
+async function buildLiveEpgMapPayload() {
   const freetvOttera = require('./freetvOttera');
   const plutoTv = require('./plutoTv');
   const channels = db.prepare(`
@@ -850,15 +851,44 @@ async function getLiveEpgMap({ force = false } = {}) {
   const epg = {};
   let matched = 0;
 
+  const plutoByRegion = new Map();
+  const freetvChannels = [];
+
   for (const ch of channels) {
-    let entry = null;
     const config = configFromChannel(ch);
     if (config.fast?.source === 'pluto' && config.fast?.external_id) {
-      entry = await plutoTv.getChannelEpg(config.fast.external_id, config.fast.region || 'MX', now);
+      const region = config.fast.region || 'MX';
+      if (!plutoByRegion.has(region)) plutoByRegion.set(region, []);
+      plutoByRegion.get(region).push({
+        channelId: ch.id,
+        externalId: String(config.fast.external_id).trim()
+      });
+    } else if (freetvOttera.isFreetvChannel(ch)) {
+      freetvChannels.push(ch);
     }
-    if (!entry && freetvOttera.isFreetvChannel(ch)) {
-      entry = await freetvOttera.getChannelEpg(ch, now);
+  }
+
+  const plutoEntries = new Map();
+  await Promise.all([...plutoByRegion.entries()].map(async ([region, rows]) => {
+    const extIds = [...new Set(rows.map((r) => r.externalId).filter(Boolean))];
+    if (!extIds.length) return;
+    const timelines = await plutoTv.fetchTimelines(extIds, region);
+    for (const row of rows) {
+      const entry = plutoTv.buildEpgFromTimelines(timelines.get(row.externalId) || [], now);
+      if (entry) plutoEntries.set(row.channelId, entry);
     }
+  }));
+
+  const freetvEntries = new Map();
+  await Promise.all(freetvChannels.map(async (ch) => {
+    try {
+      const entry = await freetvOttera.getChannelEpg(ch, now);
+      if (entry) freetvEntries.set(ch.id, entry);
+    } catch { /* ignore */ }
+  }));
+
+  for (const ch of channels) {
+    let entry = plutoEntries.get(ch.id) || freetvEntries.get(ch.id) || null;
     if (!entry) {
       entry = cache.source === 'epg'
         ? buildEpgEntry(ch, cache, now)
@@ -876,11 +906,28 @@ async function getLiveEpgMap({ force = false } = {}) {
   };
 }
 
+async function getLiveEpgMap({ force = false } = {}) {
+  await refreshEpg({ force });
+  if (force) liveEpgMapCache = null;
+  if (!force && liveEpgMapCache && liveEpgMapCache.expires > Date.now()) {
+    return liveEpgMapCache.payload;
+  }
+  const payload = await buildLiveEpgMapPayload();
+  liveEpgMapCache = { payload, expires: Date.now() + LIVE_EPG_MAP_TTL_MS };
+  return payload;
+}
+
 function startEpgScheduler() {
   if (refreshTimer) return;
-  refreshEpg().catch(() => {});
+  const warm = async () => {
+    await refreshEpg().catch(() => {});
+    await getLiveEpgMap({ force: false }).catch(() => {});
+  };
+  warm();
   refreshTimer = setInterval(() => {
-    refreshEpg({ force: true }).catch(() => {});
+    refreshEpg({ force: true })
+      .then(() => getLiveEpgMap({ force: true }))
+      .catch(() => {});
   }, REFRESH_INTERVAL_MS);
   if (refreshTimer.unref) refreshTimer.unref();
 }

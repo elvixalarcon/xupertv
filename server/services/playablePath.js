@@ -9,6 +9,25 @@ function absFromPublic(videoPath) {
   return path.join(DATA, rel);
 }
 
+function probeContainerFormat(fullPath) {
+  try {
+    const fmt = execSync(
+      `ffprobe -v error -show_entries format=format_name -of csv=p=0 ${JSON.stringify(fullPath)}`,
+      { encoding: 'utf8', timeout: 15000 }
+    ).trim().toLowerCase();
+    return fmt;
+  } catch {
+    return '';
+  }
+}
+
+function isRealMp4Container(fullPath) {
+  const fmt = probeContainerFormat(fullPath);
+  if (!fmt) return false;
+  if (fmt.includes('mpegts') || fmt === 'mpeg-ts' || fmt === 'ts') return false;
+  return fmt.includes('mov') || fmt.includes('mp4') || fmt.includes('m4v') || fmt.includes('3gp');
+}
+
 function isValidMediaFile(fullPath) {
   if (!fullPath || !fs.existsSync(fullPath)) return false;
   try {
@@ -18,6 +37,7 @@ function isValidMediaFile(fullPath) {
       stdio: 'pipe',
       timeout: 15000
     });
+    if (/\.mp4$/i.test(fullPath) && !isRealMp4Container(fullPath)) return false;
     return true;
   } catch {
     return false;

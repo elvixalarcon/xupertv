@@ -235,15 +235,30 @@ function formatBytes(n) {
   return `${v < 10 && i > 0 ? v.toFixed(1) : Math.round(v * 10) / 10} ${u[i]}`;
 }
 
+function isYtDlpActivePid(pid) {
+  try {
+    const status = fs.readFileSync(`/proc/${pid}/status`, 'utf8');
+    if (/^State:\s+Z/m.test(status)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function isYtDlpRunning() {
   try {
     const { execSync } = require('child_process');
-    const pid = execSync('pgrep -x yt-dlp 2>/dev/null || true', { encoding: 'utf8' }).trim();
-    if (pid) return true;
+    const pids = execSync('pgrep -x yt-dlp 2>/dev/null || true', { encoding: 'utf8' })
+      .trim()
+      .split('\n')
+      .filter(Boolean);
+    if (pids.some((pid) => isYtDlpActivePid(pid))) return true;
     const out = execSync('pgrep -af "^yt-dlp " 2>/dev/null || true', { encoding: 'utf8' });
     return out.split('\n').filter(Boolean).some((l) => {
       if (/pgrep|sh -c|grep|node |import-allcalidad|process-(vod|series)/i.test(l)) return false;
-      return /^[\d]+\s+.*\byt-dlp\b/.test(l);
+      const m = l.match(/^(\d+)\s+/);
+      if (!m || !isYtDlpActivePid(m[1])) return false;
+      return /\byt-dlp\b/.test(l);
     });
   } catch {
     return false;
@@ -356,7 +371,13 @@ function getMovieDownloadProgress(movie) {
     };
   }
 
-  const finished = findFinishedFile(destBase);
+  let finished = findFinishedFile(destBase);
+  if (!finished) {
+    try {
+      const { findFinishedFileForMovie } = require('./vodYtDlp');
+      finished = findFinishedFileForMovie(movie, job);
+    } catch { /* ignore */ }
+  }
   const partial = dirPartialBytes(destBase);
   const logTail = logPath ? readTail(logPath) : '';
   const parsed = logTail ? parseYtDlpLog(logTail) : null;
@@ -443,7 +464,14 @@ function getMovieDownloadProgress(movie) {
     else if (active && percent > 0) message = updatingPrefix ? `${updatingPrefix}…` : 'Descargando…';
     else if (logHasDownload && !parsed) message = updatingPrefix ? `${updatingPrefix} — iniciando…` : 'Iniciando descarga…';
     else if (ytdlp) message = updatingPrefix ? `${updatingPrefix} — en cola` : 'En cola (otra descarga activa)';
-    else message = updatingPrefix || 'En cola — turno nocturno o «Ejecutar ahora»';
+    else {
+      const { getSetting } = require('./settings');
+      const paused = getSetting('vod_downloads_paused', '0') === '1'
+        || getSetting('vod_queue_enabled', '1') === '0';
+      message = paused
+        ? 'Cola pausada — pulsa «Descargar todas las pendientes» o Reanudar'
+        : (updatingPrefix || 'En cola — pulsa Reanudar o «Descargar todas las pendientes»');
+    }
   } else if (updatingPrefix && !/actualizando/i.test(message)) {
     message = `${updatingPrefix} — ${message}`;
   }
@@ -488,24 +516,9 @@ function safeFilenameFromMovie(movie) {
 
 function getPendingMoviesProgress() {
   const out = {};
-  const jobs = loadJobs();
-  const ids = new Set();
-  for (const [key, job] of Object.entries(jobs)) {
-    if (key.startsWith('ep:') || !job?.log_file) continue;
-    const id = parseInt(key, 10);
-    if (id) ids.add(id);
-  }
-  if (isYtDlpRunning()) {
-    try {
-      const { listResumableMovies } = require('./vodYtDlp');
-      for (const m of listResumableMovies().slice(0, 5)) {
-        ids.add(m.id);
-      }
-    } catch { /* ignore */ }
-  }
-  for (const id of ids) {
-    const m = db.prepare('SELECT * FROM movies WHERE id = ?').get(id);
-    if (m) out[id] = getMovieDownloadProgress(m);
+  const pending = db.prepare('SELECT * FROM movies WHERE COALESCE(available, 1) = 0').all();
+  for (const m of pending) {
+    out[m.id] = getMovieDownloadProgress(m);
   }
   return out;
 }

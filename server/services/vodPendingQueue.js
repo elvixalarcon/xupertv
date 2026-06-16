@@ -1,7 +1,6 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const db = require('../db');
-const { extractSlugFromPath } = require('./movieDedup');
 const { isYtDlpRunning } = require('./vodDownloadProgress');
 const { hasPartialFiles, destBaseFromMovie } = require('./vodYtDlp');
 const { getSetting } = require('./settings');
@@ -18,10 +17,7 @@ function isQueueEnabled() {
 function listPendingQueue() {
   return db
     .prepare('SELECT * FROM movies WHERE COALESCE(available, 1) = 0 ORDER BY id ASC')
-    .all()
-    .filter(
-      (m) => extractSlugFromPath(m.video_path) || String(m.video_path || '').includes('pending_')
-    );
+    .all();
 }
 
 function sortQueue(list) {
@@ -34,13 +30,27 @@ function sortQueue(list) {
 }
 
 function spawnResume(movieId) {
+  const fs = require('fs');
+  const dataDir = path.join(__dirname, '..', '..', 'data', 'winscp');
+  try { fs.mkdirSync(dataDir, { recursive: true }); } catch { /* ignore */ }
+  const logPath = path.join(dataDir, `resume-${movieId}.log`);
+  let logFd;
+  try {
+    logFd = fs.openSync(logPath, 'a');
+    fs.writeSync(logFd, `\n--- ${new Date().toISOString()} resume #${movieId} ---\n`);
+  } catch {
+    logFd = 'ignore';
+  }
   const script = path.join(__dirname, '..', 'scripts', 'resume-vod-download.js');
   const child = spawn('node', [script, String(movieId)], {
     detached: true,
-    stdio: 'ignore',
+    stdio: ['ignore', logFd, logFd],
     cwd: path.join(__dirname, '..', '..')
   });
   child.unref();
+  if (typeof logFd === 'number') {
+    try { fs.closeSync(logFd); } catch { /* ignore */ }
+  }
 }
 
 /**
@@ -59,7 +69,8 @@ function spawnMovieDownload(movieId, opts = {}) {
 
 function startQueueOrchestrator(opts = {}) {
   const manual = !!opts.manual;
-  if (!manual && !isQueueEnabled()) {
+  const force = !!opts.force;
+  if (!manual && !force && !isQueueEnabled()) {
     return { ok: false, skipped: true, reason: 'Cola automática pausada' };
   }
   if (orchestratorRunning) {
@@ -90,7 +101,8 @@ function listPendingEpisodesQueue() {
 
 function startSeriesQueueOrchestrator(seriesId = null, opts = {}) {
   const manual = !!opts.manual;
-  if (!manual && !isQueueEnabled()) {
+  const force = !!opts.force;
+  if (!manual && !force && !isQueueEnabled()) {
     return { ok: false, skipped: true, reason: 'Cola automática pausada' };
   }
   if (seriesOrchestratorRunning && !seriesId) {

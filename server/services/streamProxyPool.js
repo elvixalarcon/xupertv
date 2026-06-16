@@ -10,7 +10,14 @@ const FAIL_TTL_MS = 3 * 60 * 1000;
 let roundRobin = 0;
 
 function needsStreamProxy(url = '') {
-  return /saohgdasregions\.fun/i.test(String(url || ''));
+  return /saohgdasregions\.fun|ksdjugfsddeports\.com/i.test(String(url || ''));
+}
+
+function streamOriginFor(url = '') {
+  const u = String(url || '');
+  if (/deportes\.ksdjugfsddeports\.com/i.test(u)) return 'https://deportes.ksdjugfsddeports.com';
+  if (/saohgdasregions\.fun/i.test(u)) return 'https://regionales.saohgdasregions.fun';
+  return '';
 }
 
 function isEnabled() {
@@ -376,6 +383,7 @@ function settingsSnapshot() {
 module.exports = {
   isEnabled,
   needsStreamProxy,
+  streamOriginFor,
   listProxies,
   parseProxyList,
   pickProxy,

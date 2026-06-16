@@ -169,6 +169,7 @@ async function ensureEcdfM3utsSource() {
     LIMIT 1
   `).get();
   if (!row) return { ok: false, error: 'Canal ECDF no encontrado' };
+  if (!row.enabled) return { ok: true, skipped: true, channel_id: row.id, name: row.name, reason: 'disabled' };
 
   let ecdf = null;
   let streamUrl = '';

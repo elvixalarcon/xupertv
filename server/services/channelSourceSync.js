@@ -1,7 +1,8 @@
 const db = require('../db');
-const { configFromChannel, serializeConfig, normalizeSource } = require('./channelConfig');
+const { configFromChannel, serializeConfig, normalizeSource, isUserPinned, isDirectSourceChannel, isManualStreamChannel } = require('./channelConfig');
 const { scanSources } = require('./sourceScan');
 const tvPorInternet = require('./tvPorInternet');
+const ecuaplaySync = require('./ecuaplaySync');
 
 function sourceScanOpts(config) {
   const adv = config.advanced || {};
@@ -19,6 +20,51 @@ function bodyEnabled(opts) {
 }
 
 async function scanAndFixChannel(channel, opts = {}) {
+  if (isDirectSourceChannel(channel)) {
+    return {
+      id: channel.id,
+      name: channel.name,
+      ok: true,
+      skipped: true,
+      reason: 'direct_source',
+      url: channel.stream_url,
+      working: 1,
+      total: (configFromChannel(channel).sources || []).length
+    };
+  }
+
+  if (ecuaplaySync.isFuboChannel(channel) && !isManualStreamChannel(channel)) {
+    try {
+      if (!opts.dryRun) await ecuaplaySync.activateFuboChannel(channel);
+      const fresh = db.prepare('SELECT * FROM live_channels WHERE id = ?').get(channel.id);
+      return {
+        id: channel.id,
+        name: channel.name,
+        ok: true,
+        enabled: !!(fresh?.enabled ?? 1),
+        url: fresh?.stream_url || channel.stream_url,
+        working: 1,
+        total: 1,
+        via: 'ecuaplay'
+      };
+    } catch (err) {
+      return { id: channel.id, name: channel.name, ok: false, reason: err.message || 'ecuaplay' };
+    }
+  }
+
+  if (isUserPinned(channel) && opts.respectPinned !== false) {
+    return {
+      id: channel.id,
+      name: channel.name,
+      ok: true,
+      skipped: true,
+      reason: 'pinned',
+      url: channel.stream_url,
+      working: 1,
+      total: (configFromChannel(channel).sources || []).length
+    };
+  }
+
   const config = configFromChannel(channel);
   const sources = (config.sources || []).filter((s) => s.url);
   if (!sources.length && channel.stream_url) {

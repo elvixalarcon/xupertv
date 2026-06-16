@@ -173,12 +173,12 @@ function fetchText(url, headers = {}, opts = {}) {
   });
 }
 
-async function resolveStreamOptionOnce({ canal, target, pageUrl, label, proxy = '' }) {
-  const cacheKey = `${canal}:${target}:${proxy || 'direct'}`;
+async function resolveStreamOptionOnce({ canal, target, pageUrl, label, proxy = '', streamHost = STREAM_HOST }) {
+  const cacheKey = `${streamHost}:${canal}:${target}:${proxy || 'direct'}`;
   const cached = resolvedCache.get(cacheKey);
   if (cached && cached.expires > Date.now()) return cached.value;
 
-  const streamUrl = `${STREAM_HOST}/stream.php?canal=${encodeURIComponent(canal)}&target=${target}`;
+  const streamUrl = `${streamHost}/stream.php?canal=${encodeURIComponent(canal)}&target=${target}`;
   const page = await fetchText(streamUrl, { Referer: pageUrl || `${SITE}/` }, { proxy });
   if (/registrada en nuestra base de datos/i.test(page.body)) {
     throw new Error(`Opción ${target} bloqueada por el proveedor`);
@@ -202,9 +202,12 @@ async function resolveStreamOptionOnce({ canal, target, pageUrl, label, proxy = 
 
 async function resolveStreamOption(opts) {
   const explicit = opts.proxy ? [opts.proxy] : [''];
-  const fallbacks = explicit[0] && streamProxyPool.isEnabled()
-    ? streamProxyPool.getProxiesToTry(2)
-    : [];
+  const useProxyPool = /ksdjugfsddeports/i.test(opts.streamHost || '');
+  const fallbacks = useProxyPool
+    ? streamProxyPool.listProxies().map((p) => p?.raw || p).filter(Boolean)
+    : (explicit[0] && streamProxyPool.isEnabled()
+      ? streamProxyPool.getProxiesToTry(2)
+      : []);
   const proxies = [...new Set([...explicit, ...fallbacks.map((p) => p || '')])];
   let lastErr;
   for (const proxy of proxies) {
@@ -213,7 +216,7 @@ async function resolveStreamOption(opts) {
     } catch (err) {
       lastErr = err;
       if (proxy) streamProxyPool.markFailed(proxy, err.message);
-      if (!streamProxyPool.isEnabled()) break;
+      if (!useProxyPool && !streamProxyPool.isEnabled()) break;
     }
   }
   throw lastErr || new Error('No se pudo resolver la señal');
@@ -304,8 +307,17 @@ function sortSourcesByAudio(sources) {
 
 function isTvPorInternetSource(source) {
   const url = String(source?.url || source?.resolver_url || '');
-  return /saohgdasregions\.fun\/stream\.php/i.test(url)
+  return /saohgdasregions\.fun\/stream\.php|ksdjugfsddeports\.com\/stream\.php/i.test(url)
     || source?.resolver === 'tvporinternet';
+}
+
+function streamHostFromSource(source) {
+  const resolverUrl = source?.resolver_url || source?.url || '';
+  try {
+    const origin = new URL(resolverUrl).origin;
+    if (/ksdjugfsddeports|saohgdasregions/i.test(origin)) return origin;
+  } catch { /* ignore */ }
+  return STREAM_HOST;
 }
 
 async function resolveSourceStream(source, fallbackReferer = `${SITE}/`, { force = false } = {}) {
@@ -326,7 +338,15 @@ async function resolveSourceStream(source, fallbackReferer = `${SITE}/`, { force
   const canal = decodeURIComponent(canalMatch[1]);
   const target = parseInt(targetMatch[1], 10);
   const pageUrl = source?.pageUrl || source?.referer || fallbackReferer;
-  const resolved = await resolveStreamOption({ canal, target, pageUrl, label: source?.label, proxy: '' });
+  const streamHost = streamHostFromSource(source);
+  const resolved = await resolveStreamOption({
+    canal,
+    target,
+    pageUrl,
+    label: source?.label,
+    proxy: '',
+    streamHost
+  });
   return {
     url: resolved.streamUrl,
     referer: resolved.playerUrl,
@@ -496,7 +516,7 @@ async function resolveChannelHeaders(channel, baseHeaders = {}) {
     hdrs.Referer = playback.referer || 'https://la14hd.com/';
     hdrs.Origin = 'https://la14hd.com';
   } else if (streamProxyPool.needsStreamProxy(playback.url)) {
-    hdrs.Origin = 'https://regionales.saohgdasregions.fun';
+    hdrs.Origin = streamProxyPool.streamOriginFor(playback.url) || 'https://regionales.saohgdasregions.fun';
     hdrs['Sec-Fetch-Dest'] = 'empty';
     hdrs['Sec-Fetch-Mode'] = 'cors';
     hdrs['Sec-Fetch-Site'] = 'same-site';
@@ -730,6 +750,10 @@ async function ensureLiveCatalogChannels(names = []) {
   const results = [];
   for (const meta of list) {
     const existing = findExistingChannel(meta);
+    if (existing && !existing.enabled) {
+      results.push({ ok: true, skipped: true, name: meta.name, channel_id: existing.id, reason: 'disabled' });
+      continue;
+    }
     if (existing && existing.enabled) {
       results.push({ ok: true, skipped: true, name: meta.name, channel_id: existing.id });
       continue;
@@ -738,9 +762,11 @@ async function ensureLiveCatalogChannels(names = []) {
       results.push({ ok: true, ...(await importChannel(meta)) });
     } catch (err) {
       if (existing) {
-        db.prepare(`
-          UPDATE live_channels SET group_title = ?, enabled = 1 WHERE id = ?
-        `).run(meta.group_title, existing.id);
+        if (existing.enabled) {
+          db.prepare(`
+            UPDATE live_channels SET group_title = ?, enabled = 1 WHERE id = ?
+          `).run(meta.group_title, existing.id);
+        }
         results.push({ ok: true, name: meta.name, channel_id: existing.id, warning: err.message });
       } else {
         results.push({ ok: false, name: meta.name, error: err.message || String(err) });

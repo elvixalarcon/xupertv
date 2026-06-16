@@ -287,11 +287,26 @@ function getStorefront(slug, opts = {}) {
   const id = String(slug || '').trim().toLowerCase();
 
   if (id === 'explorar') {
+    const { getExternalExploreSections } = require('./externalCatalog');
+    const { getExternalSeriesExploreSections } = require('./externalSeries');
+    const externalMovieSections = getExternalExploreSections(ROW_PREVIEW_MAX);
+    const externalSeriesSections = getExternalSeriesExploreSections(ROW_PREVIEW_MAX);
     const platforms = getExplorePlatforms(profile);
     const pool = toMixedItems(
       filterMoviesForProfile(allMovies(), profile),
       filterSeriesForProfile(allSeries(), profile)
     ).slice(0, 10);
+    const platformSections = platforms
+      .filter((p) => p.items.length)
+      .map((p) => ({
+        id: `platform-${p.id}`,
+        title: p.title,
+        subtitle: 'Plataforma',
+        type: 'mixed',
+        platform: p.id,
+        items: p.items,
+        total: p.total
+      }));
     return {
       slug: id,
       title: 'Explorar',
@@ -299,17 +314,7 @@ function getStorefront(slug, opts = {}) {
       hero: buildHeroSlides(pool),
       recent: pool.slice(0, 4),
       platforms,
-      sections: platforms
-        .filter((p) => p.items.length)
-        .map((p) => ({
-          id: `platform-${p.id}`,
-          title: p.title,
-          subtitle: 'Plataforma',
-          type: 'mixed',
-          platform: p.id,
-          items: p.items,
-          total: p.total
-        }))
+      sections: [...externalMovieSections, ...externalSeriesSections, ...platformSections]
     };
   }
 
@@ -400,6 +405,10 @@ function getStorefrontSectionItems(sectionId, limit = 500, opts = {}) {
   const id = String(sectionId || '').trim();
   const profile = opts.profile || null;
 
+  if (id.startsWith('external-')) {
+    const { getExternalSectionItems } = require('./externalCatalog');
+    return getExternalSectionItems(id, cap);
+  }
   if (id.startsWith('platform-')) {
     const platformId = id.replace(/^platform-/, '').replace(/-movies$/, '').replace(/-series$/, '');
     let pool = filterPool(platformId, profile);
@@ -430,6 +439,10 @@ function getStorefrontSectionItems(sectionId, limit = 500, opts = {}) {
   if (id.startsWith('series-')) {
     const genre = id.replace(/^series-/, '').replace(/-/g, ' ');
     return getSeriesByGenre(genre, cap).map((s) => ({ ...s, content_type: 'series' }));
+  }
+  if (id.startsWith('saga-')) {
+    const { getSagaSectionItems } = require('./catalogSagas');
+    return getSagaSectionItems(id, cap) || [];
   }
   return [];
 }

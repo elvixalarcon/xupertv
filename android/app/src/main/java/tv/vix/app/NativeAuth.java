@@ -75,6 +75,22 @@ public final class NativeAuth {
         }
     }
 
+    public static String usernameFromToken(String token) {
+        try {
+            String[] parts = token.split("\\.");
+            if (parts.length < 2) return "";
+            byte[] decoded = Base64.decode(parts[1], Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING);
+            JSONObject json = new JSONObject(new String(decoded, StandardCharsets.UTF_8));
+            return json.optString("username", "");
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    public static String getUsername(Context context) {
+        return usernameFromToken(getToken(context));
+    }
+
     private static SharedPreferences prefs(Context context) {
         return context.getSharedPreferences(MainActivity.PREFS, Context.MODE_PRIVATE);
     }

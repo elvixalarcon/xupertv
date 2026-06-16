@@ -5,6 +5,7 @@ const path = require('path');
 const db = require('../db');
 const { ensureCategory } = require('./categories');
 const { mergeConfig, serializeConfig, DEFAULT_CONFIG } = require('./channelConfig');
+const streamCache = require('./streamCache');
 
 const BASE = 'https://www.ecuaplay.online';
 const GROUP_TITLE = 'Deportes';
@@ -16,6 +17,8 @@ const LA18_REFERER = 'https://la18hd.com/';
 const ECUAPLAY_REFERER = `${BASE}/`;
 
 const PLAYER_SLUG_OVERRIDES = {
+  'playerwinsports.html': 'winsports',
+  'playerwinsportsplus.html': 'winsportsplus',
   'playerespnprem.html': 'espnpremium',
   'playerespndeportes1.html': 'espndeportes',
   'playerfoxdeportes.html': 'foxdeportes',
@@ -351,6 +354,102 @@ function isEcuaplayChannel(channel) {
   }
 }
 
+function fuboSlugFromStreamUrl(url = '') {
+  const m = String(url || '').match(/fubo18\.com(?::\d+)?\/([^/?]+)\//i);
+  return m?.[1] || '';
+}
+
+function playerFileForSlug(slug = '') {
+  if (!slug) return '';
+  for (const [player, mapped] of Object.entries(PLAYER_SLUG_OVERRIDES)) {
+    if (mapped === slug) return player;
+  }
+  return `player${slug}.html`;
+}
+
+function enrichFuboManualConfig(streamUrl, config = {}) {
+  if (!/fubo18\.com/i.test(streamUrl || '')) return config;
+  const slug = fuboSlugFromStreamUrl(streamUrl);
+  const playerFile = playerFileForSlug(slug) || 'playerdsports.html';
+  const out = mergeConfig({ ...DEFAULT_CONFIG }, config);
+  out.advanced = {
+    ...out.advanced,
+    referer: LA18_REFERER,
+    user_agent: UA,
+    allow_recording: out.direct_source ? false : true
+  };
+  out.ecuaplay = {
+    player: `${BASE}/${playerFile}`,
+    stream: slug,
+    resolver: 'la18hd',
+    updated_at: new Date().toISOString()
+  };
+  out.sources = [{
+    url: streamUrl,
+    streamUrl: streamUrl,
+    referer: LA18_REFERER,
+    user_agent: UA,
+    resolver: 'ecuaplay',
+    resolver_url: `${BASE}/${playerFile}`,
+    pageUrl: `${BASE}/${playerFile}`,
+    playerUrl: `${BASE}/${playerFile}`,
+    label: 'ECUA•PLAY',
+    site: 'ecuaplay',
+    canal: slug
+  }];
+  return out;
+}
+
+async function activateFuboChannel(channel) {
+  const row = typeof channel === 'object' && channel?.id
+    ? channel
+    : db.prepare('SELECT * FROM live_channels WHERE id = ?').get(channel);
+  if (!row) throw new Error('Canal no encontrado');
+  const playerFile = getPlayerFile(row);
+  const playback = await resolvePlayerStream(playerFile, row.name);
+  const cfg = buildConfig({ player: playerFile, label: row.name }, playback);
+  cfg.advanced = { ...cfg.advanced, allow_recording: true };
+  db.prepare('UPDATE live_channels SET stream_url = ?, config = ?, cache_enabled = 1 WHERE id = ?')
+    .run(playback.url, serializeConfig(cfg), row.id);
+  streamCache.syncRelayFromConfig(row.id, cfg);
+  try {
+    await streamCache.startCache(row.id);
+  } catch (err) {
+    console.warn(`[fubo] relay #${row.id}:`, err.message || err);
+  }
+  return db.prepare('SELECT * FROM live_channels WHERE id = ?').get(row.id);
+}
+
+function getPlayerFile(channel) {
+  try {
+    const config = typeof channel.config === 'string' ? JSON.parse(channel.config) : (channel.config || {});
+    const player = config.ecuaplay?.player || config.sources?.[0]?.playerUrl || '';
+    const file = String(player).split('/').pop();
+    if (file) return file;
+    const slug = fuboSlugFromStreamUrl(channel?.stream_url || '');
+    return playerFileForSlug(slug) || 'playerwinsports.html';
+  } catch {
+    const slug = fuboSlugFromStreamUrl(channel?.stream_url || '');
+    return playerFileForSlug(slug) || 'playerwinsports.html';
+  }
+}
+
+function isFuboChannel(channel) {
+  return /fubo18\.com/i.test(channel?.stream_url || '')
+    || isEcuaplayChannel(channel);
+}
+
+/** Segundos hasta expiración del token fubo18 (si se puede leer de la URL). */
+function fuboTokenTtlSec(url) {
+  const m = String(url || '').match(/token=[^&]+-(\d+)-(\d+)/i);
+  if (!m) return null;
+  const exp = parseInt(m[1], 10);
+  const start = parseInt(m[2], 10);
+  if (!Number.isFinite(exp) || !Number.isFinite(start)) return null;
+  const remain = exp - Math.floor(Date.now() / 1000);
+  return remain > 0 ? remain : 0;
+}
+
 module.exports = {
   BASE,
   GROUP_TITLE,
@@ -358,5 +457,12 @@ module.exports = {
   resolvePlayerStream,
   importEcuaplayDeportes,
   refreshEcuaplayChannel,
-  isEcuaplayChannel
+  isEcuaplayChannel,
+  getPlayerFile,
+  isFuboChannel,
+  fuboTokenTtlSec,
+  fuboSlugFromStreamUrl,
+  playerFileForSlug,
+  enrichFuboManualConfig,
+  activateFuboChannel
 };

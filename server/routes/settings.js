@@ -1,9 +1,9 @@
 const express = require('express');
 const { auth, adminOnly } = require('../middleware/auth');
 const { getSetting, setSetting, getTmdbApiKey, maskKey } = require('../services/settings');
+const publicApiKeys = require('../services/publicApiKeys');
 const { fetchTmdbMoviePoster } = require('../services/posters');
 const streamProxyPool = require('../services/streamProxyPool');
-const vodNightlySync = require('../services/vodNightlySync');
 const appUpdate = require('../services/appUpdate');
 const db = require('../db');
 
@@ -17,7 +17,6 @@ router.get('/', auth, adminOnly, (req, res) => {
     tmdb_api_key_masked: maskKey(key),
     tmdb_configured: !!key,
     ...proxy,
-    ...vodNightlySync.getPublicSettings(),
     ...appUpdate.getPublicSettings()
   });
 });
@@ -33,9 +32,7 @@ router.put('/', auth, adminOnly, (req, res) => {
   if (stream_proxy_list !== undefined) {
     setSetting('stream_proxy_list', String(stream_proxy_list || '').trim());
   }
-  vodNightlySync.applySettings(req.body);
   appUpdate.applySettings(req.body);
-  vodNightlySync.restartVodNightlyScheduler();
   const key = getTmdbApiKey();
   const proxy = streamProxyPool.settingsSnapshot();
   res.json({
@@ -43,7 +40,6 @@ router.put('/', auth, adminOnly, (req, res) => {
     tmdb_configured: !!key,
     tmdb_api_key_masked: maskKey(key),
     ...proxy,
-    ...vodNightlySync.getPublicSettings(),
     ...appUpdate.getPublicSettings()
   });
 });
@@ -94,6 +90,44 @@ router.post('/refresh-all-posters', auth, adminOnly, async (req, res) => {
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }
+});
+
+router.get('/public-api', auth, adminOnly, (req, res) => {
+  const data = publicApiKeys.listKeys();
+  const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+  const host = req.headers['x-forwarded-host'] || req.get('host') || 'localhost';
+  res.json({
+    ...data,
+    base_url: `${proto}://${host}/api/v1`,
+    docs_url: `${proto}://${host}/api/v1/docs`
+  });
+});
+
+router.put('/public-api', auth, adminOnly, (req, res) => {
+  const enabled = publicApiKeys.setEnabled(req.body?.enabled !== false);
+  res.json({ ok: true, enabled, ...publicApiKeys.listKeys() });
+});
+
+router.post('/public-api/keys', auth, adminOnly, (req, res) => {
+  const name = String(req.body?.name || '').trim() || 'Integración';
+  const scopes = req.body?.scopes;
+  const created = publicApiKeys.createKey(name, scopes);
+  const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+  const host = req.headers['x-forwarded-host'] || req.get('host') || 'localhost';
+  res.status(201).json({
+    ok: true,
+    key: created.key,
+    entry: created.entry,
+    message: 'Guarda esta clave ahora — no se volverá a mostrar completa.',
+    base_url: `${proto}://${host}/api/v1`,
+    docs_url: `${proto}://${host}/api/v1/docs`
+  });
+});
+
+router.delete('/public-api/keys/:id', auth, adminOnly, (req, res) => {
+  const ok = publicApiKeys.revokeKey(req.params.id);
+  if (!ok) return res.status(404).json({ error: 'Clave no encontrada' });
+  res.json({ ok: true, ...publicApiKeys.listKeys() });
 });
 
 router.post('/refresh-trailers', auth, adminOnly, async (req, res) => {
