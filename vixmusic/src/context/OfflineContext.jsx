@@ -18,6 +18,7 @@ import {
 } from '../lib/downloads';
 import { getOfflineId } from '../lib/offlineIds';
 import { httpGetBlob } from '../lib/http';
+import { YT_STREAM_HEADERS } from '../lib/audioPlayback';
 
 const OfflineContext = createContext(null);
 
@@ -64,7 +65,7 @@ export function OfflineProvider({ children }) {
         );
 
         setActiveDownload({ id: oid, title: track.title, progress: 55 });
-        const blob = await httpGetBlob(stream.url);
+        const blob = await httpGetBlob(stream.url, 180000, YT_STREAM_HEADERS);
         if (!blob.size) throw new Error('Archivo vacío');
 
         await saveDownload(

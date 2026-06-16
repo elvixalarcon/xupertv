@@ -13,6 +13,12 @@ import { getDownloadForTrack, getPlaybackUrl, hasOfflineAudio } from '../lib/dow
 import { getOfflineId } from '../lib/offlineIds';
 import { isNativeApp } from '../lib/platform';
 import { getPipedAudioStreamUrl } from '../api/piped';
+import {
+  unlockAudioElement,
+  resolveStreamPlaybackUrl,
+  fetchStreamBlobUrl,
+  mapAudioError,
+} from '../lib/audioPlayback';
 import { setupMediaSession, setMediaPlaybackState, clearMediaSession } from '../lib/mediaSession';
 
 const PlayerContext = createContext(null);
@@ -105,6 +111,11 @@ export function PlayerProvider({ children }) {
       audio.addEventListener('pause', () => {
         setPlaying(false);
         setMediaPlaybackState(false);
+      });
+      audio.addEventListener('error', () => {
+        if (!usingAudioRef.current) return;
+        setPlayerError(mapAudioError(audio));
+        setPlaying(false);
       });
     }
     return audio;
@@ -206,6 +217,8 @@ export function PlayerProvider({ children }) {
       pauseYouTube();
       setResolving(true);
       setPlayerError('');
+      if (fromUser) unlockAudioElement(ensureAudio());
+
       try {
         const stream = await getPipedAudioStreamUrl(
           track.videoId,
@@ -213,7 +226,6 @@ export function PlayerProvider({ children }) {
         );
         const audio = ensureAudio();
         audio.volume = volume / 100;
-        audio.src = stream.url;
         usingAudioRef.current = true;
         audioModeRef.current = 'stream';
         setOfflineMode(false);
@@ -231,9 +243,26 @@ export function PlayerProvider({ children }) {
         setVideoPreview(false);
         bindMediaSession(resolved);
 
-        if (fromUser) {
-          await audio.play();
+        const loadAndPlay = async (src) => {
+          audio.src = src;
+          if (fromUser) await audio.play();
+        };
+
+        if (useNativeAudio) {
+          try {
+            await loadAndPlay(resolveStreamPlaybackUrl(stream.url));
+          } catch {
+            const blobUrl = await fetchStreamBlobUrl(stream.url, stream.mimeType);
+            if (audioBlobUrlRef.current?.startsWith('blob:')) {
+              URL.revokeObjectURL(audioBlobUrlRef.current);
+            }
+            audioBlobUrlRef.current = blobUrl;
+            await loadAndPlay(blobUrl);
+          }
+        } else {
+          await loadAndPlay(stream.url);
         }
+
         setPlayerError('');
       } catch (e) {
         setPlayerError(e.message || 'No se pudo cargar el audio');
@@ -379,9 +408,10 @@ export function PlayerProvider({ children }) {
       }
       failedVideosRef.current = new Set();
       alternateVideosRef.current = [];
+      if (useNativeAudio) unlockAudioElement(ensureAudio());
       playTrackInternal(t, list, startIndex, true);
     },
-    [playTrackInternal],
+    [playTrackInternal, ensureAudio],
   );
 
   const pickNextIndex = useCallback((cur, q) => {
@@ -592,6 +622,17 @@ export function PlayerProvider({ children }) {
       setResolving(false);
     }
   }, [tryNextAlternate, startVideo, playStream]);
+
+  useEffect(() => {
+    if (!useNativeAudio) return undefined;
+    const onGesture = () => unlockAudioElement(ensureAudio());
+    document.addEventListener('touchstart', onGesture, { once: true, passive: true });
+    document.addEventListener('click', onGesture, { once: true });
+    return () => {
+      document.removeEventListener('touchstart', onGesture);
+      document.removeEventListener('click', onGesture);
+    };
+  }, [ensureAudio]);
 
   useEffect(() => {
     if (useNativeAudio) {

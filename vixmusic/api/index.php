@@ -12,6 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require __DIR__ . '/lib/helpers.php';
 require __DIR__ . '/lib/db.php';
+require __DIR__ . '/lib/stream.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
 $uri = $_SERVER['PATH_INFO'] ?? '';
@@ -36,6 +37,10 @@ function route(string $method, string $uri): void
 
     if ($uri === '/health' && $method === 'GET') {
         json_response(['ok' => true, 'service' => 'vixmusic-api']);
+    }
+
+    if ($uri === '/stream' && $method === 'GET') {
+        handle_audio_stream();
     }
 
     if ($uri === '/auth/register' && $method === 'POST') {

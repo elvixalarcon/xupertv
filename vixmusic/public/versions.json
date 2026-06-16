@@ -1,14 +1,14 @@
 {
   "android": {
-    "version": "1.3.2",
-    "versionCode": 7,
+    "version": "1.3.3",
+    "versionCode": 8,
     "url": "http://5.5.5.8/vixmusic/VixMusic-release.apk",
-    "notes": "Menú inferior fijo estilo app nativa en iOS y Android."
+    "notes": "Corrección reproducción de audio en móvil (proxy + desbloqueo iOS)."
   },
   "ios": {
-    "version": "1.3.2",
-    "build": 7,
+    "version": "1.3.3",
+    "build": 8,
     "url": "http://5.5.5.8/vixmusic/VixMusic.ipa",
-    "notes": "Menú inferior fijo, sin rebote WebView, interfaz nativa en iOS."
+    "notes": "Corrección reproducción de audio en iPhone y Android."
   }
 }

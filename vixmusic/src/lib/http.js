@@ -82,8 +82,8 @@ export async function httpFetch(url, options = {}) {
   return toFetchResponse(res, responseType);
 }
 
-export async function httpGetBlob(url, timeout = 180000) {
-  const res = await httpFetch(url, { responseType: 'blob', timeout });
+export async function httpGetBlob(url, timeout = 180000, headers = {}) {
+  const res = await httpFetch(url, { responseType: 'blob', timeout, headers });
   if (!res.ok) throw new Error(`Error al descargar (${res.status})`);
   return res.blob();
 }
