@@ -1,14 +1,14 @@
 {
   "android": {
-    "version": "1.3.0",
-    "versionCode": 5,
+    "version": "1.3.1",
+    "versionCode": 6,
     "url": "http://5.5.5.8/vixmusic/VixMusic-release.apk",
-    "notes": "UI móvil, cuentas corregidas y página de descargas."
+    "notes": "Corrección pantalla negra en Android y descargas sin comprimir."
   },
   "ios": {
-    "version": "1.3.0",
-    "build": 5,
+    "version": "1.3.1",
+    "build": 6,
     "url": "http://5.5.5.8/vixmusic/VixMusic.ipa",
-    "notes": "UI móvil, cuentas corregidas y página de descargas."
+    "notes": "Corrección pantalla negra y descargas sin comprimir."
   }
 }

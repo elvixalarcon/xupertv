@@ -17,6 +17,7 @@ import {
   formatBytes,
 } from '../lib/downloads';
 import { getOfflineId } from '../lib/offlineIds';
+import { httpGetBlob } from '../lib/http';
 
 const OfflineContext = createContext(null);
 
@@ -63,11 +64,7 @@ export function OfflineProvider({ children }) {
         );
 
         setActiveDownload({ id: oid, title: track.title, progress: 55 });
-        const res = await fetch(stream.url);
-        if (!res.ok) throw new Error('Error al descargar el archivo');
-
-        setActiveDownload({ id: oid, title: track.title, progress: 80 });
-        const blob = await res.blob();
+        const blob = await httpGetBlob(stream.url);
         if (!blob.size) throw new Error('Archivo vacío');
 
         await saveDownload(

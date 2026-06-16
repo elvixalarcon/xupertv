@@ -21,15 +21,15 @@ import RegisterView from './views/RegisterView';
 import AccountView from './views/AccountView';
 import AdminView from './views/AdminView';
 import PlaylistsView from './views/PlaylistsView';
-import { initAppConfig, getConfigStatus } from './api/config';
+import { initAppConfig } from './api/config';
 import { getRouterBasename } from './lib/platform';
+import UpdateChecker from './components/UpdateChecker';
 import './index.css';
 
 const PANEL_KEY = 'vixmusic_panel_open';
 
 export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [cfg, setCfg] = useState({ spotify: false });
   const [booting, setBooting] = useState(true);
   const [panelOpen, setPanelOpen] = useState(() => {
     const v = localStorage.getItem(PANEL_KEY);
@@ -58,14 +58,27 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
+    const timeout = setTimeout(() => {
+      if (!cancelled) setBooting(false);
+    }, 4000);
+
     (async () => {
-      await initAppConfig();
-      if (!cancelled) {
-        setCfg(getConfigStatus());
-        setBooting(false);
+      try {
+        await initAppConfig();
+      } catch {
+        /* ignore */
+      } finally {
+        if (!cancelled) {
+          clearTimeout(timeout);
+          setBooting(false);
+        }
       }
     })();
-    return () => { cancelled = true; };
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
   }, []);
 
   if (booting) {
@@ -92,14 +105,9 @@ export default function App() {
                 panelOpen={panelOpen}
                 onTogglePanel={togglePanel}
               />
-              {!cfg.spotify && (
-                <div className="api-banner" onClick={() => setSettingsOpen(true)} role="button" tabIndex={0}>
-                  ⚠ Configura Spotify Client ID + Secret en Ajustes para buscar artistas y canciones
-                </div>
-              )}
               <div className="spotify-content">
                 <Routes>
-                  <Route path="/" element={<HomeView key={cfg.spotify ? 'sp' : 'piped'} />} />
+                  <Route path="/" element={<HomeView />} />
                   <Route path="/buscar" element={<SearchView />} />
                   <Route path="/biblioteca" element={<LibraryView />} />
                   <Route path="/descargas" element={<DownloadsView />} />
@@ -126,8 +134,8 @@ export default function App() {
         <SettingsModal
           open={settingsOpen}
           onClose={() => setSettingsOpen(false)}
-          onSaved={() => setCfg(getConfigStatus())}
         />
+        <UpdateChecker />
       </BrowserRouter>
       </PlayerProvider>
     </OfflineProvider>

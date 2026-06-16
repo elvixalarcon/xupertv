@@ -1,3 +1,4 @@
+# SPA fallback
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /vixmusic/
@@ -6,3 +7,19 @@
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule . /vixmusic/index.html [L]
 </IfModule>
+
+# Descargas APK/IPA sin compresión gzip
+<IfModule mod_headers.c>
+  <FilesMatch "\.(apk|ipa)$">
+    Header set Content-Type "application/octet-stream"
+    Header set Content-Disposition "attachment"
+    Header unset Content-Encoding
+  </FilesMatch>
+</IfModule>
+
+<IfModule mod_deflate.c>
+  SetEnvIfNoCase Request_URI \.(apk|ipa)$ no-gzip dont-vary
+</IfModule>
+
+AddType application/vnd.android.package-archive .apk
+AddType application/octet-stream .ipa

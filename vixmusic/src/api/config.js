@@ -1,12 +1,19 @@
-import { applySpotifyFromServer, setSpotifyCredentials, getSpotifyClientId, getSpotifyClientSecret } from './spotify';
+import { applySpotifyFromServer } from './spotify';
+import { loadAppConfig, getServerUrl } from '../lib/appConfig';
+import { httpFetch } from '../lib/http';
+import { Capacitor } from '@capacitor/core';
 
 export async function initAppConfig() {
+  await loadAppConfig();
+
   try {
     const base = import.meta.env.BASE_URL || '/';
-    const res = await fetch(`${base}config.json`, { cache: 'no-store' });
+    const configUrl = Capacitor.isNativePlatform()
+      ? `${getServerUrl()}/config.json`
+      : `${base}config.json`;
+    const res = await httpFetch(configUrl, { cache: 'no-store', timeout: 8000 });
     if (!res.ok) return;
     const j = await res.json();
-
     const sid = (j.spotify_client_id || '').trim();
     const sec = (j.spotify_client_secret || '').trim();
     applySpotifyFromServer(sid, sec);
@@ -20,15 +27,5 @@ export async function initAppConfig() {
 }
 
 export function getConfigStatus() {
-  return {
-    spotify: Boolean(getSpotifyClientId() && getSpotifyClientSecret()),
-  };
+  return { ready: true };
 }
-
-export function saveUserConfig({ spotifyId, spotifySecret }) {
-  if (spotifyId?.trim() && spotifySecret?.trim()) {
-    setSpotifyCredentials(spotifyId, spotifySecret);
-  }
-}
-
-export { getSpotifyClientId, getSpotifyClientSecret };

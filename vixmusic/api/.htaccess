@@ -1,4 +1,7 @@
 RewriteEngine On
 RewriteBase /vixmusic/api/
+
+SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
+
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteRule ^ index.php [QSA,L]

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Descargar VixMusic</title>
+  <link rel="icon" href="/vixmusic/logo.svg" />
+  <style>
+    body { font-family: system-ui, sans-serif; background: #000; color: #fff; margin: 0; padding: 24px 16px; }
+    .wrap { max-width: 480px; margin: 0 auto; }
+    h1 { font-size: 1.6rem; }
+    .card { background: #181818; border-radius: 12px; padding: 20px; margin: 16px 0; border: 1px solid #333; }
+    .btn { display: block; text-align: center; padding: 14px; border-radius: 24px; font-weight: 700; text-decoration: none; margin-top: 12px; }
+    .btn-green { background: #1db954; color: #000; }
+    .hint { color: #aaa; font-size: 0.85rem; line-height: 1.5; }
+    a { color: #1db954; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Descargar VixMusic</h1>
+    <p class="hint">Los archivos .apk e .ipa se descargan directos, sin comprimir en zip.</p>
+
+    <div class="card">
+      <h2>Android (APK)</h2>
+      <p class="hint" id="av">Versión…</p>
+      <a class="btn btn-green" href="/vixmusic/VixMusic-release.apk" download="VixMusic-release.apk">Descargar APK</a>
+    </div>
+
+    <div class="card">
+      <h2>iPhone (IPA)</h2>
+      <p class="hint">Archivo .ipa listo para eSign, AltStore o Sideloadly. No es un zip: es el formato normal de iOS.</p>
+      <p class="hint" id="iv">Versión…</p>
+      <a class="btn btn-green" href="/vixmusic/VixMusic.ipa" download="VixMusic.ipa">Descargar IPA</a>
+    </div>
+
+    <p><a href="/vixmusic/">Abrir app web</a> · <a href="/vixmusic/registro">Crear cuenta</a></p>
+  </div>
+  <script>
+    fetch('/vixmusic/versions.json').then(r => r.json()).then(v => {
+      if (v.android) document.getElementById('av').textContent = 'Versión ' + v.android.version;
+      if (v.ios) document.getElementById('iv').textContent = 'Versión ' + v.ios.version;
+    }).catch(() => {});
+  </script>
+</body>
+</html>

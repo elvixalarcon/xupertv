@@ -34,7 +34,7 @@ git add -A
 if git diff --staged --quiet; then
   echo "Sin cambios"
 else
-  git commit -m "VixMusic 1.3.0: compilación IPA limpia"
+  git commit -m "VixMusic 1.3.1: fix pantalla negra Android y descargas sin comprimir"
   git push origin main
 fi
 

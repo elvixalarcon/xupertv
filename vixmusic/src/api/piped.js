@@ -37,10 +37,10 @@ function normalizePipedItem(item) {
   };
 }
 
+import { httpFetch } from '../lib/http';
+
 function fetchWithTimeout(url, ms = 12000) {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), ms);
-  return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(timer));
+  return httpFetch(url, { timeout: ms, responseType: 'json' });
 }
 
 export async function pipedSearch(query, maxResults = 25) {
