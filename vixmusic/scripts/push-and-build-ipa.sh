@@ -34,7 +34,7 @@ git add -A
 if git diff --staged --quiet; then
   echo "Sin cambios"
 else
-  git commit -m "VixMusic 1.3.6: menú móvil, progreso descarga y audio background"
+  git commit -m "VixMusic 1.3.8: fix actualización, favoritos y cierre preview"
   git push origin main
 fi
 

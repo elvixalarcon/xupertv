@@ -6,10 +6,24 @@ import MediaCard from '../components/MediaCard';
 export default function LibraryView() {
   const { favorites, isLoggedIn, refreshFavorites, toggleFavorite } = useAuth();
   const [items, setItems] = useState(favorites);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    refreshFavorites().then(setItems);
-  }, [favorites, refreshFavorites]);
+    setItems(favorites);
+  }, [favorites]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    refreshFavorites()
+      .then((list) => {
+        if (!cancelled) setItems(list);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [refreshFavorites]);
 
   const remove = async (track) => {
     await toggleFavorite(track);
@@ -29,7 +43,11 @@ export default function LibraryView() {
         )}
       </section>
 
-      {items.length === 0 ? (
+      {loading ? (
+        <div className="empty-library">
+          <p>Cargando favoritos…</p>
+        </div>
+      ) : items.length === 0 ? (
         <div className="empty-library">
           <p>No hay favoritos aún.</p>
           <p className="hint">Marca ♥ en el reproductor o busca música.</p>

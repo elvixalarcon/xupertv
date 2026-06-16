@@ -54,12 +54,20 @@ function matchPath(pathname, to, end) {
   return pathname === to || pathname.startsWith(`${to}/`);
 }
 
-export default function MobileNav() {
+function releaseTap(el) {
+  if (!el) return;
+  el.blur();
+  el.classList.remove('is-pressed');
+}
+
+export default function MobileNav({ onNavigate }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
 
-  const go = (to) => {
-    if (pathname !== to) navigate(to);
+  const go = (to, end) => {
+    if (onNavigate) onNavigate();
+    if (matchPath(pathname, to, end)) return;
+    navigate(to);
   };
 
   return (
@@ -71,7 +79,11 @@ export default function MobileNav() {
             key={to}
             type="button"
             className={`mobile-nav__item${active ? ' active' : ''}`}
-            onClick={() => go(to)}
+            onClick={(e) => {
+              go(to, end);
+              releaseTap(e.currentTarget);
+            }}
+            onTouchEnd={(e) => releaseTap(e.currentTarget)}
             aria-current={active ? 'page' : undefined}
             aria-label={label}
           >

@@ -4,6 +4,7 @@ import { Capacitor } from '@capacitor/core';
 import { getServerUrl } from '../lib/appConfig';
 import { httpFetch } from '../lib/http';
 import { isNativeApp } from '../lib/platform';
+import { openExternalUrl } from '../lib/openExternal';
 
 function isNewer(remote, current) {
   const a = String(remote).split('.').map((n) => parseInt(n, 10) || 0);
@@ -17,6 +18,7 @@ function isNewer(remote, current) {
 
 export default function UpdateChecker() {
   const [update, setUpdate] = useState(null);
+  const [opening, setOpening] = useState(false);
 
   useEffect(() => {
     if (!isNativeApp()) return undefined;
@@ -41,17 +43,34 @@ export default function UpdateChecker() {
     return () => { cancelled = true; };
   }, []);
 
+  const onDownload = async () => {
+    if (!update?.url || opening) return;
+    setOpening(true);
+    try {
+      await openExternalUrl(update.url);
+    } catch {
+      window.location.href = update.url;
+    } finally {
+      setOpening(false);
+    }
+  };
+
   if (!update) return null;
 
   return (
-    <div className="modal-backdrop" role="presentation">
-      <div className="modal" role="dialog">
-        <h2>Actualización {update.version}</h2>
+    <div className="modal-backdrop update-backdrop" role="presentation">
+      <div className="modal update-modal" role="dialog" aria-labelledby="update-title">
+        <h2 id="update-title">Actualización {update.version}</h2>
         <p>{update.notes}</p>
+        <p className="update-modal__hint">
+          {update.platform === 'android'
+            ? 'Se abrirá el navegador para descargar el APK. Instálalo encima de la versión actual.'
+            : 'Se abrirá el enlace para descargar la nueva versión.'}
+        </p>
         <div className="modal-actions">
           <button type="button" className="btn-secondary" onClick={() => setUpdate(null)}>Más tarde</button>
-          <button type="button" className="btn-primary" onClick={() => window.open(update.url, '_system')}>
-            Descargar
+          <button type="button" className="btn-primary" onClick={onDownload} disabled={opening}>
+            {opening ? 'Abriendo…' : 'Descargar'}
           </button>
         </div>
       </div>

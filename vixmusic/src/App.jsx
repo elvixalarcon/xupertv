@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { App as CapApp } from '@capacitor/app';
 import { OfflineProvider } from './context/OfflineContext';
 import { AuthProvider } from './context/AuthContext';
 import Sidebar from './components/Sidebar';
@@ -49,6 +50,17 @@ export default function App() {
   };
 
   const closeNowPlayingView = () => setNowPlayingView(false);
+
+  useEffect(() => {
+    if (!isNativeApp()) return undefined;
+    let handle;
+    CapApp.addListener('backButton', () => {
+      if (nowPlayingView) {
+        setNowPlayingView(false);
+      }
+    }).then((h) => { handle = h; });
+    return () => { handle?.remove(); };
+  }, [nowPlayingView]);
 
   const togglePanel = () => {
     setPanelOpen((o) => {
@@ -136,7 +148,7 @@ export default function App() {
           </div>
           <div className="mobile-chrome">
             <BottomPlayer onOpenNowPlaying={openNowPlaying} />
-            <MobileNav />
+            <MobileNav onNavigate={closeNowPlayingView} />
           </div>
         </div>
         <SettingsModal

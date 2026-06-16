@@ -1,14 +1,14 @@
 {
   "android": {
-    "version": "1.3.7",
-    "versionCode": 12,
+    "version": "1.3.8",
+    "versionCode": 13,
     "url": "http://5.5.5.8/vixmusic/VixMusic-release.apk",
-    "notes": "Logo nuevo, reproductor compacto estilo Spotify, vista fullscreen y audio online en segundo plano."
+    "notes": "Corrección actualización APK, menú Favoritos sin pegarse y cierre del reproductor con gesto o atrás."
   },
   "ios": {
-    "version": "1.3.7",
-    "build": 12,
+    "version": "1.3.8",
+    "build": 13,
     "url": "http://5.5.5.8/vixmusic/VixMusic.ipa",
-    "notes": "Logo nuevo, reproductor compacto y audio online en segundo plano."
+    "notes": "Corrección actualización, Favoritos y cierre del reproductor fullscreen."
   }
 }

@@ -2,6 +2,7 @@ package com.vixmusic.app;
 
 import android.Manifest;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Build;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -36,6 +37,23 @@ public class BackgroundAudioPlugin extends Plugin {
     public void stop(PluginCall call) {
         getContext().stopService(new Intent(getContext(), MediaPlaybackService.class));
         call.resolve();
+    }
+
+    @PluginMethod
+    public void openUrl(PluginCall call) {
+        String url = call.getString("url");
+        if (url == null || url.isEmpty()) {
+            call.reject("URL vacía");
+            return;
+        }
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("No se pudo abrir el enlace", e);
+        }
     }
 
     @PluginMethod

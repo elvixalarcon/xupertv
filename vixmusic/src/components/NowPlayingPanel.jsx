@@ -1,4 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
+import { useRef } from 'react';
 import { usePlayer } from '../context/PlayerContext';
 import { formatTime } from '../lib/utils';
 import { useAuth } from '../context/AuthContext';
@@ -66,9 +67,28 @@ export default function NowPlayingPanel({ open, onClose, viewOpen, onCloseView }
     if (track) await toggleFavorite(track);
   };
 
+  const swipeStartY = useRef(0);
+  const swipeActive = useRef(false);
+
+  const onSwipeStart = (e) => {
+    swipeStartY.current = e.touches[0]?.clientY ?? 0;
+    swipeActive.current = true;
+  };
+
+  const onSwipeEnd = (e) => {
+    if (!swipeActive.current) return;
+    swipeActive.current = false;
+    const endY = e.changedTouches[0]?.clientY ?? 0;
+    if (endY - swipeStartY.current > 70) onCloseView();
+  };
+
   if (fullscreen) {
     return (
-      <div className="np-screen">
+      <div
+        className="np-screen"
+        onTouchStart={onSwipeStart}
+        onTouchEnd={onSwipeEnd}
+      >
         <div
           className="np-screen__bg"
           style={{ backgroundImage: `url(${track.image})` }}
@@ -77,8 +97,9 @@ export default function NowPlayingPanel({ open, onClose, viewOpen, onCloseView }
         <div className="np-screen__shade" aria-hidden />
 
         <header className="np-screen__header">
-          <button type="button" className="np-screen__icon-btn" onClick={onCloseView} aria-label="Minimizar">
+          <button type="button" className="np-screen__icon-btn np-screen__minimize" onClick={onCloseView} aria-label="Minimizar">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z" /></svg>
+            <span>Minimizar</span>
           </button>
           <div className="np-screen__source">
             <span className="np-screen__source-label">Reproduciendo desde {source}</span>
@@ -89,7 +110,7 @@ export default function NowPlayingPanel({ open, onClose, viewOpen, onCloseView }
           </button>
         </header>
 
-        <div className="np-screen__lyrics">
+        <div className="np-screen__lyrics" onClick={onCloseView} role="button" tabIndex={0} aria-label="Minimizar reproductor">
           {resolving ? (
             <p className="np-screen__lyrics-line np-screen__lyrics-line--dim">Cargando audio…</p>
           ) : playerError ? (
