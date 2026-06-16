@@ -5,7 +5,14 @@
   "server": {
     "androidScheme": "https",
     "cleartext": true,
-    "allowNavigation": ["5.5.5.8", "http://5.5.5.8"]
+    "allowNavigation": [
+      "5.5.5.8",
+      "http://5.5.5.8",
+      "*.youtube.com",
+      "*.youtube-nocookie.com",
+      "*.googlevideo.com",
+      "*.ytimg.com"
+    ]
   },
   "ios": {
     "contentInset": "never",

@@ -25,6 +25,12 @@ const PlayerContext = createContext(null);
 export const PLAYER_HOST_ID = 'vix-yt-player-host';
 const useNativeAudio = isNativeApp();
 
+function friendlyError(err, fallback = 'No se pudo reproducir') {
+  const msg = err?.message || '';
+  if (!msg || /cannot read properties|null \(reading/i.test(msg)) return fallback;
+  return msg.length > 120 ? `${msg.slice(0, 120)}…` : msg;
+}
+
 function normKey(title, artist) {
   return `${(title || '').toLowerCase().replace(/[^a-z0-9]/g, '')}|${(artist || '').toLowerCase().replace(/[^a-z0-9]/g, '')}`;
 }
@@ -265,7 +271,7 @@ export function PlayerProvider({ children }) {
 
         setPlayerError('');
       } catch (e) {
-        setPlayerError(e.message || 'No se pudo cargar el audio');
+        setPlayerError(friendlyError(e, 'No se pudo cargar el audio'));
         throw e;
       } finally {
         setResolving(false);
@@ -303,7 +309,7 @@ export function PlayerProvider({ children }) {
 
   const tryNextAlternateRef = useRef(() => false);
 
-  const tryNextAlternate = useCallback((fromUser = true) => {
+  const tryNextAlternate = useCallback(async (fromUser = true) => {
     while (alternateVideosRef.current.length) {
       const vid = alternateVideosRef.current.shift();
       if (!vid || failedVideosRef.current.has(vid)) continue;
@@ -311,12 +317,17 @@ export function PlayerProvider({ children }) {
       const q = [...queueRef.current];
       const idx = indexRef.current;
       if (useNativeAudio && q[idx]) {
-        const t = { ...q[idx], videoId: vid };
-        q[idx] = t;
-        setQueue(q);
-        setCurrent((c) => (c ? { ...c, videoId: vid } : c));
-        playStream(t, q, idx, fromUser).catch(() => {});
-        return true;
+        try {
+          const t = { ...q[idx], videoId: vid };
+          q[idx] = t;
+          setQueue(q);
+          setCurrent((c) => (c ? { ...c, videoId: vid } : c));
+          await playStream(t, q, idx, fromUser);
+          return true;
+        } catch {
+          stopAudio();
+          usingAudioRef.current = false;
+        }
       }
       if (startVideo(vid, fromUser)) {
         if (q[idx]) {
@@ -328,7 +339,7 @@ export function PlayerProvider({ children }) {
       }
     }
     return false;
-  }, [startVideo, playStream]);
+  }, [startVideo, playStream, stopAudio]);
 
   tryNextAlternateRef.current = tryNextAlternate;
 
@@ -378,10 +389,14 @@ export function PlayerProvider({ children }) {
       if (useNativeAudio && track.videoId) {
         try {
           await playStream(track, newList, startIndex, fromUser);
+          return;
         } catch {
-          /* error ya en playStream */
+          stopAudio();
+          usingAudioRef.current = false;
+          setBackgroundAudio(false);
+          setPlayerError('');
+          /* Fallback: reproductor YouTube embebido */
         }
-        return;
       }
 
       const p = playerRef.current;
@@ -593,7 +608,7 @@ export function PlayerProvider({ children }) {
   const retryCurrentTrack = useCallback(async () => {
     const cur = queueRef.current[indexRef.current];
     if (!cur) return;
-    if (tryNextAlternate(true)) return;
+    if (await tryNextAlternate(true)) return;
 
     if (cur.videoId) failedVideosRef.current.add(cur.videoId);
     setResolving(true);
@@ -611,7 +626,13 @@ export function PlayerProvider({ children }) {
       setQueue(q);
       setCurrent({ ...alt, title: cleanSongTitle(alt.title) || alt.title });
       if (useNativeAudio) {
-        await playStream(alt, q, idx, true);
+        try {
+          await playStream(alt, q, idx, true);
+        } catch {
+          stopAudio();
+          usingAudioRef.current = false;
+          startVideo(alt.videoId, true);
+        }
       } else {
         startVideo(alt.videoId, true);
       }
@@ -624,22 +645,6 @@ export function PlayerProvider({ children }) {
   }, [tryNextAlternate, startVideo, playStream]);
 
   useEffect(() => {
-    if (!useNativeAudio) return undefined;
-    const onGesture = () => unlockAudioElement(ensureAudio());
-    document.addEventListener('touchstart', onGesture, { once: true, passive: true });
-    document.addEventListener('click', onGesture, { once: true });
-    return () => {
-      document.removeEventListener('touchstart', onGesture);
-      document.removeEventListener('click', onGesture);
-    };
-  }, [ensureAudio]);
-
-  useEffect(() => {
-    if (useNativeAudio) {
-      setPlayerReady(true);
-      return undefined;
-    }
-
     let cancelled = false;
     let created = false;
 
@@ -713,7 +718,7 @@ export function PlayerProvider({ children }) {
               return;
             }
 
-            if (tryNextAlternateRef.current(true)) return;
+            if (await tryNextAlternateRef.current(true)) return;
 
             if (!cur || retryingRef.current) {
               setPlayerError(codes[e.data] || 'Error de reproducción');
@@ -751,6 +756,17 @@ export function PlayerProvider({ children }) {
       if (tickRef.current) clearInterval(tickRef.current);
     };
   }, [startVideo]);
+
+  useEffect(() => {
+    if (!useNativeAudio) return undefined;
+    const onGesture = () => unlockAudioElement(ensureAudio());
+    document.addEventListener('touchstart', onGesture, { once: true, passive: true });
+    document.addEventListener('click', onGesture, { once: true });
+    return () => {
+      document.removeEventListener('touchstart', onGesture);
+      document.removeEventListener('click', onGesture);
+    };
+  }, [ensureAudio]);
 
   useEffect(() => {
     if (!playerReady) return;

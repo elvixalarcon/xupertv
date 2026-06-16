@@ -50,7 +50,7 @@ export async function pipedSearch(query, maxResults = 25) {
       const url = `${base}/search?q=${encodeURIComponent(query)}&filter=videos`;
       const res = await fetchWithTimeout(url);
       if (!res.ok) throw new Error(`Piped ${res.status}`);
-      const data = await res.json();
+      const data = parsePipedJson(await res.json());
       const items = (data.items || [])
         .map(normalizePipedItem)
         .filter(Boolean)
@@ -63,14 +63,27 @@ export async function pipedSearch(query, maxResults = 25) {
   throw lastErr || new Error('No hay instancias Piped disponibles');
 }
 
+function parsePipedJson(data) {
+  if (!data || typeof data !== 'object') {
+    throw new Error('El servidor de audio no respondió');
+  }
+  if (data.error) {
+    const err = typeof data.error === 'string' ? data.error : 'Vídeo no disponible';
+    if (/unavailable|not available|SignIn|bot/i.test(err)) {
+      throw new Error('YouTube bloqueó este vídeo para extracción directa');
+    }
+    throw new Error(err.length > 100 ? `${err.slice(0, 100)}…` : err);
+  }
+  return data;
+}
+
 async function fetchStreams(videoId) {
   let lastErr;
   for (const base of INSTANCES) {
     try {
       const res = await fetchWithTimeout(`${base}/streams/${videoId}`, 20000);
       if (!res.ok) throw new Error(`Piped ${res.status}`);
-      const data = await res.json();
-      if (data.error) throw new Error(data.message || data.error);
+      const data = parsePipedJson(await res.json());
       return data;
     } catch (e) {
       lastErr = e;

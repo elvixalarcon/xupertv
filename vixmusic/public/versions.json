@@ -1,14 +1,14 @@
 {
   "android": {
-    "version": "1.3.3",
-    "versionCode": 8,
+    "version": "1.3.4",
+    "versionCode": 9,
     "url": "http://5.5.5.8/vixmusic/VixMusic-release.apk",
-    "notes": "Corrección reproducción de audio en móvil (proxy + desbloqueo iOS)."
+    "notes": "Fallback YouTube en móvil cuando Piped falla; sin errores JS."
   },
   "ios": {
-    "version": "1.3.3",
-    "build": 8,
+    "version": "1.3.4",
+    "build": 9,
     "url": "http://5.5.5.8/vixmusic/VixMusic.ipa",
-    "notes": "Corrección reproducción de audio en iPhone y Android."
+    "notes": "Reproducción con reproductor YouTube si el audio directo falla."
   }
 }
