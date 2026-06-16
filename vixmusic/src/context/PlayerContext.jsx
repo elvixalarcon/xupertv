@@ -262,22 +262,33 @@ export function PlayerProvider({ children }) {
         setVideoPreview(false);
         bindMediaSession(resolved);
 
-        const loadAndPlay = async (src) => {
-          await startBackgroundPlayback(resolved);
+        const beginPlayback = async (src) => {
           audio.src = src;
-          if (fromUser) await audio.play();
+          if (fromUser) {
+            await audio.play();
+            startBackgroundPlayback(resolved).catch(() => {});
+          }
         };
 
         if (useNativeAudio) {
-          // Buffer completo: mismo comportamiento que offline en segundo plano
-          const blobUrl = await fetchStreamBlobUrl(stream.url, stream.mimeType);
-          if (audioBlobUrlRef.current?.startsWith('blob:')) {
-            URL.revokeObjectURL(audioBlobUrlRef.current);
+          let started = false;
+          try {
+            await beginPlayback(resolveStreamPlaybackUrl(stream.url));
+            started = true;
+          } catch {
+            /* streaming directo falló — intentar buffer completo */
           }
-          audioBlobUrlRef.current = blobUrl;
-          await loadAndPlay(blobUrl);
+
+          if (!started) {
+            const blobUrl = await fetchStreamBlobUrl(stream.url, stream.mimeType);
+            if (audioBlobUrlRef.current?.startsWith('blob:')) {
+              URL.revokeObjectURL(audioBlobUrlRef.current);
+            }
+            audioBlobUrlRef.current = blobUrl;
+            await beginPlayback(blobUrl);
+          }
         } else {
-          await loadAndPlay(stream.url);
+          await beginPlayback(stream.url);
         }
 
         setPlayerError('');
@@ -405,7 +416,13 @@ export function PlayerProvider({ children }) {
           stopAudio();
           usingAudioRef.current = false;
           setBackgroundAudio(false);
-          setPlayerError(friendlyError(e, 'No se pudo cargar el audio online'));
+          setPlayerError('');
+          const p = playerRef.current;
+          if (playerReady && p?.loadVideoById) {
+            startVideo(track.videoId, fromUser);
+            return;
+          }
+          setPlayerError(friendlyError(e, 'No se pudo cargar el audio'));
           return;
         }
       }

@@ -48,12 +48,22 @@ export function resolveStreamPlaybackUrl(cdnUrl) {
   return getProxiedStreamUrl(cdnUrl);
 }
 
-/** Descarga el audio completo y devuelve blob URL (necesario para segundo plano en móvil). */
+/** Descarga el audio completo y devuelve blob URL (respaldo para segundo plano). */
 export async function fetchStreamBlobUrl(cdnUrl, mimeType = 'audio/mp4') {
-  const fetchUrl = isNativePlayback() ? getProxiedStreamUrl(cdnUrl) : cdnUrl;
+  const attempts = isNativePlayback()
+    ? [getProxiedStreamUrl(cdnUrl), cdnUrl]
+    : [cdnUrl];
   const headers = isNativePlayback() ? {} : YT_STREAM_HEADERS;
-  const blob = await httpGetBlob(fetchUrl, 300000, headers);
-  return URL.createObjectURL(new Blob([blob], { type: mimeType || 'audio/mp4' }));
+  let lastErr;
+  for (const fetchUrl of attempts) {
+    try {
+      const blob = await httpGetBlob(fetchUrl, 180000, headers);
+      return URL.createObjectURL(new Blob([blob], { type: mimeType || 'audio/mp4' }));
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error('No se pudo descargar el audio');
 }
 
 export function mapAudioError(audio) {
