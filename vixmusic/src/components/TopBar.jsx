@@ -1,9 +1,11 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 
 export default function TopBar({ onOpenSettings, panelOpen, onTogglePanel }) {
   const [q, setQ] = useState('');
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const onSearchPage = pathname === '/buscar' || pathname.startsWith('/buscar/');
 
   const submit = (e) => {
     e.preventDefault();
@@ -13,7 +15,7 @@ export default function TopBar({ onOpenSettings, panelOpen, onTogglePanel }) {
   };
 
   return (
-    <header className="top-bar">
+    <header className={`top-bar${onSearchPage ? ' top-bar--search-page' : ''}`}>
       <div className="top-bar__left">
         <Link to="/" end className="top-bar__home" title="Inicio" aria-label="Inicio">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
@@ -22,18 +24,20 @@ export default function TopBar({ onOpenSettings, panelOpen, onTogglePanel }) {
         </Link>
       </div>
 
-      <form className="top-bar__search" onSubmit={submit}>
-        <svg className="top-bar__search-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-          <path d="M10.533 1.279c-5.18 0-9.407 4.14-9.407 9.279s4.226 9.279 9.407 9.279c2.234 0 4.29-.77 5.918-2.066l4.957 4.957a1 1 0 1 0 1.414-1.414l-4.957-4.957A9.266 9.266 0 0 0 10.533 1.279zm-7.407 9.279c0-4.006 3.312-7.279 7.407-7.279s7.407 3.273 7.407 7.279-3.312 7.279-7.407 7.279-7.407-3.273-7.407-7.279z" />
-        </svg>
-        <input
-          type="search"
-          placeholder="¿Qué quieres reproducir?"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          aria-label="Buscar"
-        />
-      </form>
+      {!onSearchPage && (
+        <form className="top-bar__search" onSubmit={submit}>
+          <svg className="top-bar__search-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+            <path d="M10.533 1.279c-5.18 0-9.407 4.14-9.407 9.279s4.226 9.279 9.407 9.279c2.234 0 4.29-.77 5.918-2.066l4.957 4.957a1 1 0 1 0 1.414-1.414l-4.957-4.957A9.266 9.266 0 0 0 10.533 1.279zm-7.407 9.279c0-4.006 3.312-7.279 7.407-7.279s7.407 3.273 7.407 7.279-3.312 7.279-7.407 7.279-7.407-3.273-7.407-7.279z" />
+          </svg>
+          <input
+            type="search"
+            placeholder="¿Qué quieres reproducir?"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            aria-label="Buscar"
+          />
+        </form>
+      )}
 
       <div className="top-bar__right">
         <button

@@ -34,7 +34,7 @@ git add -A
 if git diff --staged --quiet; then
   echo "Sin cambios"
 else
-  git commit -m "VixMusic 1.3.8: fix actualización, favoritos y cierre preview"
+  git commit -m "VixMusic 1.3.9: quitar buscador duplicado en Buscar"
   git push origin main
 fi
 

@@ -1,14 +1,14 @@
 {
   "android": {
-    "version": "1.3.8",
-    "versionCode": 13,
+    "version": "1.3.9",
+    "versionCode": 14,
     "url": "http://5.5.5.8/vixmusic/VixMusic-release.apk",
-    "notes": "Corrección actualización APK, menú Favoritos sin pegarse y cierre del reproductor con gesto o atrás."
+    "notes": "Corrección buscador duplicado en la pantalla Buscar."
   },
   "ios": {
-    "version": "1.3.8",
-    "build": 13,
+    "version": "1.3.9",
+    "build": 14,
     "url": "http://5.5.5.8/vixmusic/VixMusic.ipa",
-    "notes": "Corrección actualización, Favoritos y cierre del reproductor fullscreen."
+    "notes": "Corrección buscador duplicado en la pantalla Buscar."
   }
 }

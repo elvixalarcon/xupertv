@@ -523,6 +523,14 @@ html.native-app .mobile-nav__item:active {
   transform: scale(1.04);
 }
 
+.top-bar--search-page {
+  grid-template-columns: auto 1fr;
+}
+
+.top-bar--search-page .top-bar__right {
+  justify-self: end;
+}
+
 .top-bar__search {
   max-width: 520px;
   width: 100%;
