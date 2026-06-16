@@ -30,11 +30,6 @@ node scripts/copy-config-for-cap.js || true
 CAPACITOR=1 npm run build
 npx cap sync ios
 
-echo "==> CocoaPods"
-cd "$IOS_APP"
-pod install --repo-update
-cd "$ROOT"
-
 BUILD_DIR="$IOS_APP/build"
 rm -rf "$BUILD_DIR" Payload "$OUT_DIR/$IPA_NAME"
 mkdir -p "$OUT_DIR"
