@@ -6,6 +6,7 @@ dist-ssr
 
 # Secrets / local config
 public/config.json
+private/
 android/keystore.properties
 android/*.keystore
 android/local.properties

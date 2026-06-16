@@ -11,9 +11,13 @@ import { resolveForPlayback, fetchRadioMoreTracks, cleanSongTitle, parseTrackFor
 import { getCompatPlayback } from '../lib/playbackSettings';
 import { getDownloadForTrack, getPlaybackUrl, hasOfflineAudio } from '../lib/downloads';
 import { getOfflineId } from '../lib/offlineIds';
+import { isNativeApp } from '../lib/platform';
+import { getPipedAudioStreamUrl } from '../api/piped';
+import { setupMediaSession, setMediaPlaybackState, clearMediaSession } from '../lib/mediaSession';
 
 const PlayerContext = createContext(null);
 export const PLAYER_HOST_ID = 'vix-yt-player-host';
+const useNativeAudio = isNativeApp();
 
 function normKey(title, artist) {
   return `${(title || '').toLowerCase().replace(/[^a-z0-9]/g, '')}|${(artist || '').toLowerCase().replace(/[^a-z0-9]/g, '')}`;
@@ -37,12 +41,14 @@ export function PlayerProvider({ children }) {
   const alternateVideosRef = useRef([]);
   const retryingRef = useRef(false);
   const compatRef = useRef(getCompatPlayback());
-  const offlineAudioRef = useRef(null);
-  const offlineBlobUrlRef = useRef(null);
-  const usingOfflineRef = useRef(false);
+  const audioRef = useRef(null);
+  const audioBlobUrlRef = useRef(null);
+  const usingAudioRef = useRef(false);
+  const audioModeRef = useRef(null);
 
   const [compatPlayback, setCompatPlaybackState] = useState(() => getCompatPlayback());
   const [offlineMode, setOfflineMode] = useState(false);
+  const [backgroundAudio, setBackgroundAudio] = useState(false);
 
   const [queue, setQueue] = useState([]);
   const [index, setIndex] = useState(0);
@@ -76,21 +82,67 @@ export function PlayerProvider({ children }) {
     }
   }, []);
 
-  const stopOffline = useCallback(() => {
-    const audio = offlineAudioRef.current;
+  const ensureAudio = useCallback(() => {
+    let audio = audioRef.current;
+    if (!audio) {
+      audio = new Audio();
+      audio.setAttribute('playsinline', 'true');
+      audio.setAttribute('webkit-playsinline', 'true');
+      audio.preload = 'auto';
+      audioRef.current = audio;
+      audio.addEventListener('ended', () => nextRef.current());
+      audio.addEventListener('timeupdate', () => {
+        if (!usingAudioRef.current) return;
+        setProgress(audio.currentTime || 0);
+        if (audio.duration && Number.isFinite(audio.duration)) {
+          setDuration(audio.duration);
+        }
+      });
+      audio.addEventListener('play', () => {
+        setPlaying(true);
+        setMediaPlaybackState(true);
+      });
+      audio.addEventListener('pause', () => {
+        setPlaying(false);
+        setMediaPlaybackState(false);
+      });
+    }
+    return audio;
+  }, []);
+
+  const bindMediaSession = useCallback((track) => {
+    setupMediaSession(track, {
+      onPlay: () => audioRef.current?.play().catch(() => {}),
+      onPause: () => audioRef.current?.pause(),
+      onNext: () => nextRef.current(),
+      onPrev: () => prevRef.current?.(),
+      onSeek: (t) => {
+        if (audioRef.current) {
+          audioRef.current.currentTime = t;
+          setProgress(t);
+        }
+      },
+    });
+  }, []);
+
+  const prevRef = useRef(null);
+
+  const stopAudio = useCallback(() => {
+    const audio = audioRef.current;
     if (audio) {
       audio.pause();
       audio.removeAttribute('src');
       audio.load();
     }
-    if (offlineBlobUrlRef.current?.startsWith('blob:')) {
-      URL.revokeObjectURL(offlineBlobUrlRef.current);
-      offlineBlobUrlRef.current = null;
-    } else {
-      offlineBlobUrlRef.current = null;
+    if (audioBlobUrlRef.current?.startsWith('blob:')) {
+      URL.revokeObjectURL(audioBlobUrlRef.current);
     }
-    usingOfflineRef.current = false;
+    audioBlobUrlRef.current = null;
+    usingAudioRef.current = false;
+    audioModeRef.current = null;
     setOfflineMode(false);
+    setBackgroundAudio(false);
+    clearMediaSession();
   }, []);
 
   const pauseYouTube = useCallback(() => {
@@ -103,30 +155,17 @@ export function PlayerProvider({ children }) {
 
   const playOffline = useCallback(
     async (record, list, startIndex, fromUser = true) => {
-      stopOffline();
+      stopAudio();
       pauseYouTube();
 
-      let audio = offlineAudioRef.current;
-      if (!audio) {
-        audio = new Audio();
-        offlineAudioRef.current = audio;
-        audio.addEventListener('ended', () => nextRef.current());
-        audio.addEventListener('timeupdate', () => {
-          if (!usingOfflineRef.current) return;
-          setProgress(audio.currentTime || 0);
-          if (audio.duration && Number.isFinite(audio.duration)) {
-            setDuration(audio.duration);
-          }
-        });
-        audio.addEventListener('play', () => setPlaying(true));
-        audio.addEventListener('pause', () => setPlaying(false));
-      }
-
+      const audio = ensureAudio();
       const url = await getPlaybackUrl(record);
       if (!url) throw new Error('Archivo offline no válido');
-      offlineBlobUrlRef.current = url;
-      usingOfflineRef.current = true;
+      audioBlobUrlRef.current = url;
+      usingAudioRef.current = true;
+      audioModeRef.current = 'offline';
       setOfflineMode(true);
+      setBackgroundAudio(useNativeAudio);
       audio.volume = volume / 100;
       audio.src = url;
 
@@ -152,16 +191,62 @@ export function PlayerProvider({ children }) {
       });
       setVideoPreview(false);
       setPlayerError('');
+      bindMediaSession(track);
 
       if (fromUser) {
         audio.play().catch(() => setPlayerError('No se pudo reproducir offline'));
       }
     },
-    [pauseYouTube, stopOffline, volume],
+    [pauseYouTube, stopAudio, volume, ensureAudio, bindMediaSession],
+  );
+
+  const playStream = useCallback(
+    async (track, list, startIndex, fromUser = true) => {
+      stopAudio();
+      pauseYouTube();
+      setResolving(true);
+      setPlayerError('');
+      try {
+        const stream = await getPipedAudioStreamUrl(
+          track.videoId,
+          track.alternateVideoIds || alternateVideosRef.current || [],
+        );
+        const audio = ensureAudio();
+        audio.volume = volume / 100;
+        audio.src = stream.url;
+        usingAudioRef.current = true;
+        audioModeRef.current = 'stream';
+        setOfflineMode(false);
+        setBackgroundAudio(true);
+
+        const resolved = { ...track, videoId: stream.videoId || track.videoId };
+        const newList = [...list];
+        newList[startIndex] = resolved;
+        setQueue(newList);
+        setIndex(startIndex);
+        setCurrent({
+          ...resolved,
+          title: cleanSongTitle(parseTrackForSearch(resolved).title || resolved.title) || resolved.title,
+        });
+        setVideoPreview(false);
+        bindMediaSession(resolved);
+
+        if (fromUser) {
+          await audio.play();
+        }
+        setPlayerError('');
+      } catch (e) {
+        setPlayerError(e.message || 'No se pudo cargar el audio');
+        throw e;
+      } finally {
+        setResolving(false);
+      }
+    },
+    [pauseYouTube, stopAudio, volume, ensureAudio, bindMediaSession],
   );
 
   const startVideo = useCallback((videoId, fromUser = false) => {
-    stopOffline();
+    stopAudio();
     const p = playerRef.current;
     if (!p || !videoId) return false;
     setPlayerError('');
@@ -185,7 +270,7 @@ export function PlayerProvider({ children }) {
       return false;
     }
     return false;
-  }, [stopOffline]);
+  }, [stopAudio]);
 
   const tryNextAlternateRef = useRef(() => false);
 
@@ -194,9 +279,17 @@ export function PlayerProvider({ children }) {
       const vid = alternateVideosRef.current.shift();
       if (!vid || failedVideosRef.current.has(vid)) continue;
       setPlayerError('Probando otra versión…');
+      const q = [...queueRef.current];
+      const idx = indexRef.current;
+      if (useNativeAudio && q[idx]) {
+        const t = { ...q[idx], videoId: vid };
+        q[idx] = t;
+        setQueue(q);
+        setCurrent((c) => (c ? { ...c, videoId: vid } : c));
+        playStream(t, q, idx, fromUser).catch(() => {});
+        return true;
+      }
       if (startVideo(vid, fromUser)) {
-        const q = [...queueRef.current];
-        const idx = indexRef.current;
         if (q[idx]) {
           q[idx] = { ...q[idx], videoId: vid };
           setQueue(q);
@@ -206,7 +299,7 @@ export function PlayerProvider({ children }) {
       }
     }
     return false;
-  }, [startVideo]);
+  }, [startVideo, playStream]);
 
   tryNextAlternateRef.current = tryNextAlternate;
 
@@ -227,7 +320,7 @@ export function PlayerProvider({ children }) {
         return;
       }
 
-      stopOffline();
+      stopAudio();
       let track = t;
       setResolving(true);
       try {
@@ -253,6 +346,15 @@ export function PlayerProvider({ children }) {
       });
       setVideoPreview(false);
 
+      if (useNativeAudio && track.videoId) {
+        try {
+          await playStream(track, newList, startIndex, fromUser);
+        } catch {
+          /* error ya en playStream */
+        }
+        return;
+      }
+
       const p = playerRef.current;
       if (playerReady && p?.loadVideoById && track.videoId) {
         startVideo(track.videoId, fromUser);
@@ -260,7 +362,7 @@ export function PlayerProvider({ children }) {
         pendingRef.current = { t: track, list: newList, startIndex, fromUser };
       }
     },
-    [startVideo, playerReady, playOffline],
+    [startVideo, playerReady, playOffline, playStream],
   );
 
   playTrackInternalRef.current = playTrackInternal;
@@ -369,8 +471,8 @@ export function PlayerProvider({ children }) {
   const next = useCallback(() => { advance(); }, [advance]);
 
   const prev = useCallback(() => {
-    if (usingOfflineRef.current) {
-      const audio = offlineAudioRef.current;
+    if (usingAudioRef.current) {
+      const audio = audioRef.current;
       if (audio && audio.currentTime > 3) {
         audio.currentTime = 0;
         setProgress(0);
@@ -394,9 +496,11 @@ export function PlayerProvider({ children }) {
     if (ni >= 0 && q[ni]) playTrackInternal(q[ni], q, ni, true);
   }, [pickPrevIndex, playTrackInternal]);
 
+  prevRef.current = prev;
+
   const toggle = useCallback(() => {
-    if (usingOfflineRef.current) {
-      const audio = offlineAudioRef.current;
+    if (usingAudioRef.current) {
+      const audio = audioRef.current;
       if (!audio) return;
       if (audio.paused) {
         audio.play().catch(() => {});
@@ -423,8 +527,8 @@ export function PlayerProvider({ children }) {
   }, []);
 
   const seek = useCallback((sec) => {
-    if (usingOfflineRef.current && offlineAudioRef.current) {
-      offlineAudioRef.current.currentTime = sec;
+    if (usingAudioRef.current && audioRef.current) {
+      audioRef.current.currentTime = sec;
       setProgress(sec);
       return;
     }
@@ -476,16 +580,25 @@ export function PlayerProvider({ children }) {
       q[idx] = alt;
       setQueue(q);
       setCurrent({ ...alt, title: cleanSongTitle(alt.title) || alt.title });
-      startVideo(alt.videoId, true);
+      if (useNativeAudio) {
+        await playStream(alt, q, idx, true);
+      } else {
+        startVideo(alt.videoId, true);
+      }
       setPlayerError('');
     } catch (e) {
       setPlayerError(e.message || 'No se pudo reproducir');
     } finally {
       setResolving(false);
     }
-  }, [tryNextAlternate, startVideo]);
+  }, [tryNextAlternate, startVideo, playStream]);
 
   useEffect(() => {
+    if (useNativeAudio) {
+      setPlayerReady(true);
+      return undefined;
+    }
+
     let cancelled = false;
     let created = false;
 
@@ -608,8 +721,8 @@ export function PlayerProvider({ children }) {
   }, [playerReady, startVideo]);
 
   useEffect(() => {
-    if (usingOfflineRef.current && offlineAudioRef.current) {
-      offlineAudioRef.current.volume = volume / 100;
+    if (usingAudioRef.current && audioRef.current) {
+      audioRef.current.volume = volume / 100;
       return;
     }
     if (!playerReady) return;
@@ -619,7 +732,7 @@ export function PlayerProvider({ children }) {
   useEffect(() => {
     if (tickRef.current) clearInterval(tickRef.current);
     tickRef.current = setInterval(() => {
-      if (usingOfflineRef.current) return;
+      if (usingAudioRef.current) return;
       const p = playerRef.current;
       if (!p?.getCurrentTime) return;
       try {
@@ -675,6 +788,8 @@ export function PlayerProvider({ children }) {
         setCompatPlayback,
         retryCurrentTrack,
         offlineMode,
+        backgroundAudio,
+        useNativeAudio,
       }}
     >
       {children}

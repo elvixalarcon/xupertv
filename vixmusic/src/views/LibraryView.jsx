@@ -1,21 +1,32 @@
 import { useEffect, useState } from 'react';
-import { listFavorites, removeFavorite } from '../lib/favorites';
+import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import MediaCard from '../components/MediaCard';
 
 export default function LibraryView() {
-  const [items, setItems] = useState([]);
-
-  const reload = () => setItems(listFavorites());
+  const { favorites, isLoggedIn, refreshFavorites, toggleFavorite } = useAuth();
+  const [items, setItems] = useState(favorites);
 
   useEffect(() => {
-    reload();
-  }, []);
+    refreshFavorites().then(setItems);
+  }, [favorites, refreshFavorites]);
+
+  const remove = async (track) => {
+    await toggleFavorite(track);
+    const next = await refreshFavorites();
+    setItems(next);
+  };
 
   return (
     <div className="home-view">
       <section className="home-hero">
         <h1>Tus favoritos</h1>
-        <p className="subtitle">Guardados en este dispositivo</p>
+        <p className="subtitle">
+          {isLoggedIn ? 'Sincronizados con tu cuenta' : 'Solo en este dispositivo — inicia sesión para guardarlos en la nube'}
+        </p>
+        {!isLoggedIn && (
+          <Link to="/login" className="btn-secondary">Iniciar sesión</Link>
+        )}
       </section>
 
       {items.length === 0 ? (
@@ -29,7 +40,7 @@ export default function LibraryView() {
             {items.map((t, i) => (
               <div key={t.id} className="fav-wrap">
                 <MediaCard track={t} list={items} index={i} />
-                <button type="button" className="fav-remove" onClick={() => { removeFavorite(t.id); reload(); }}>
+                <button type="button" className="fav-remove" onClick={() => remove(t)}>
                   Quitar
                 </button>
               </div>

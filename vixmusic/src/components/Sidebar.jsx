@@ -1,9 +1,10 @@
 import { Link, NavLink } from 'react-router-dom';
-import { listFavorites } from '../lib/favorites';
+import { useAuth } from '../context/AuthContext';
 import VixMusicLogo from './VixMusicLogo';
 
 export default function Sidebar() {
-  const favs = listFavorites().slice(0, 12);
+  const { favorites, playlists, user } = useAuth();
+  const favs = favorites.slice(0, 8);
 
   return (
     <aside className="library-sidebar">
@@ -17,7 +18,8 @@ export default function Sidebar() {
       </div>
 
       <div className="library-sidebar__filters">
-        <NavLink to="/biblioteca" className={({ isActive }) => `lib-chip${isActive ? ' active' : ''}`}>Playlists</NavLink>
+        <NavLink to="/playlists" className={({ isActive }) => `lib-chip${isActive ? ' active' : ''}`}>Playlists</NavLink>
+        <NavLink to="/biblioteca" className={({ isActive }) => `lib-chip${isActive ? ' active' : ''}`}>Favoritos</NavLink>
         <NavLink to="/descargas" className={({ isActive }) => `lib-chip${isActive ? ' active' : ''}`}>Descargas</NavLink>
         <NavLink to="/artistas" className={({ isActive }) => `lib-chip${isActive ? ' active' : ''}`}>Artistas</NavLink>
         <NavLink to="/" end className={({ isActive }) => `lib-chip${isActive ? ' active' : ''}`}>Álbumes</NavLink>
@@ -51,6 +53,15 @@ export default function Sidebar() {
             <div className="lib-item__sub">Playlist • Offline</div>
           </div>
         </NavLink>
+        {playlists.slice(0, 4).map((pl) => (
+          <NavLink key={pl.id} to="/playlists" className="lib-item">
+            <div className="lib-item__thumb lib-item__thumb--pl">♪</div>
+            <div className="lib-item__text">
+              <div className="lib-item__name">{pl.name}</div>
+              <div className="lib-item__sub">Playlist • {pl.trackCount} canciones</div>
+            </div>
+          </NavLink>
+        ))}
         {favs.map((f) => (
           <div key={f.id} className="lib-item">
             <img className="lib-item__thumb" src={f.image} alt="" />
@@ -63,6 +74,24 @@ export default function Sidebar() {
       </div>
 
       <VixMusicLogo className="library-sidebar__logo" compact />
+      <div className="library-sidebar__account">
+        {user ? (
+          <NavLink to="/cuenta" className="lib-item lib-item--account">
+            <div className="lib-item__thumb lib-item__thumb--user">{(user.displayName || user.username)[0]?.toUpperCase()}</div>
+            <div className="lib-item__text">
+              <div className="lib-item__name">{user.displayName}</div>
+              <div className="lib-item__sub">Mi cuenta</div>
+            </div>
+          </NavLink>
+        ) : (
+          <NavLink to="/login" className="lib-item lib-item--account">
+            <div className="lib-item__text">
+              <div className="lib-item__name">Iniciar sesión</div>
+              <div className="lib-item__sub">Crear cuenta gratis</div>
+            </div>
+          </NavLink>
+        )}
+      </div>
     </aside>
   );
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { OfflineProvider } from './context/OfflineContext';
+import { AuthProvider } from './context/AuthContext';
 import Sidebar from './components/Sidebar';
 import MobileNav from './components/MobileNav';
 import TopBar from './components/TopBar';
@@ -15,6 +16,11 @@ import LibraryView from './views/LibraryView';
 import DownloadsView from './views/DownloadsView';
 import ArtistsView from './views/ArtistsView';
 import ArtistView from './views/ArtistView';
+import LoginView from './views/LoginView';
+import RegisterView from './views/RegisterView';
+import AccountView from './views/AccountView';
+import AdminView from './views/AdminView';
+import PlaylistsView from './views/PlaylistsView';
 import { initAppConfig, getConfigStatus } from './api/config';
 import { getRouterBasename } from './lib/platform';
 import './index.css';
@@ -72,6 +78,7 @@ export default function App() {
   }
 
   return (
+    <AuthProvider>
     <OfflineProvider>
       <PlayerProvider>
         <BrowserRouter basename={getRouterBasename()}>
@@ -98,6 +105,11 @@ export default function App() {
                   <Route path="/descargas" element={<DownloadsView />} />
                   <Route path="/artistas" element={<ArtistsView />} />
                   <Route path="/artista/:artistId" element={<ArtistView />} />
+                  <Route path="/playlists" element={<PlaylistsView />} />
+                  <Route path="/login" element={<LoginView />} />
+                  <Route path="/registro" element={<RegisterView />} />
+                  <Route path="/cuenta" element={<AccountView />} />
+                  <Route path="/admin" element={<AdminView />} />
                 </Routes>
               </div>
             </div>
@@ -119,5 +131,6 @@ export default function App() {
       </BrowserRouter>
       </PlayerProvider>
     </OfflineProvider>
+    </AuthProvider>
   );
 }

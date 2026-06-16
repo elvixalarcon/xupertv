@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchUnifiedHome, fetchHomeArtists } from '../api/unified';
+import { vixApi } from '../api/vixApi';
+import { useAuth } from '../context/AuthContext';
 import MediaCard, { QuickPick } from '../components/MediaCard';
 import ArtistCard from '../components/ArtistCard';
 
@@ -14,8 +16,11 @@ function getGreeting() {
 }
 
 export default function HomeView() {
+  const { isLoggedIn, user } = useAuth();
   const [tracks, setTracks] = useState([]);
   const [artists, setArtists] = useState([]);
+  const [recs, setRecs] = useState([]);
+  const [recHint, setRecHint] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('Todo');
@@ -26,13 +31,24 @@ export default function HomeView() {
       setLoading(true);
       setError('');
       try {
-        const [t, a] = await Promise.all([
+        const jobs = [
           fetchUnifiedHome(18),
           fetchHomeArtists(10).catch(() => []),
-        ]);
+        ];
+        if (isLoggedIn) {
+          jobs.push(vixApi.recommendations().catch(() => ({ items: [], hint: '' })));
+        }
+        const results = await Promise.all(jobs);
         if (!cancelled) {
-          setTracks(t);
-          setArtists(a);
+          setTracks(results[0]);
+          setArtists(results[1]);
+          if (isLoggedIn && results[2]) {
+            setRecs(results[2].items || []);
+            setRecHint(results[2].hint || '');
+          } else {
+            setRecs([]);
+            setRecHint('');
+          }
         }
       } catch (e) {
         if (!cancelled) setError(e.message || 'Error al cargar');
@@ -41,7 +57,7 @@ export default function HomeView() {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [isLoggedIn]);
 
   if (loading) return <div className="view-loading">Cargando música…</div>;
   if (error) return <div className="view-error">{error}</div>;
@@ -65,8 +81,22 @@ export default function HomeView() {
       </div>
 
       <section className="home-hero">
-        <h1>{getGreeting()}</h1>
+        <h1>{getGreeting()}{user ? `, ${user.displayName}` : ''}</h1>
       </section>
+
+      {isLoggedIn && recs.length > 0 && (
+        <section className="home-section">
+          <div className="section-head">
+            <h2>Hecho para ti</h2>
+            <span className="section-hint">{recHint}</span>
+          </div>
+          <div className="media-grid">
+            {recs.filter((r) => r.type !== 'artist_radio').map((t, i) => (
+              <MediaCard key={t.id} track={t} list={recs} index={i} />
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="home-quick">
         <div className="quick-grid">

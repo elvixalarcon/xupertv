@@ -19,6 +19,8 @@ export default function NowPlayingPanel({ open, onClose, viewOpen, onCloseView }
     toggle,
     next,
     prev,
+    useNativeAudio,
+    backgroundAudio,
   } = usePlayer();
 
   const fullscreen = viewOpen && track;
@@ -55,7 +57,7 @@ export default function NowPlayingPanel({ open, onClose, viewOpen, onCloseView }
               <img src={track.image} alt="" />
             </div>
 
-            {track && !resolving && (
+            {track && !resolving && !useNativeAudio && (
               <button
                 type="button"
                 className={`now-playing__audio-toggle ${videoPreview ? '' : 'on'}`}
@@ -63,6 +65,10 @@ export default function NowPlayingPanel({ open, onClose, viewOpen, onCloseView }
               >
                 {videoPreview ? 'Cambiar a audio' : 'Ver video'}
               </button>
+            )}
+
+            {backgroundAudio && (
+              <p className="now-playing__hint">La música sigue con la pantalla apagada o en otras apps</p>
             )}
 
             {resolving && (

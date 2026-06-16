@@ -83,18 +83,22 @@ Descarga directa (si está publicado en el servidor): `http://TU_IP/vixmusic/Vix
 adb install android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-## iPhone (IPA, sin App Store)
+### IPA iPhone (sin App Store)
 
-Requiere **Mac** con Xcode:
+La IPA se compila en **GitHub Actions** (macOS) con el workflow `vixmusic-ios-ipa.yml` del repo [xupertv](https://github.com/elvixalarcon/xupertv).
 
 ```bash
-npm install @capacitor/ios
-npx cap add ios
-npm run cap:sync
-npx cap open ios
+# En el servidor con gh autenticado (ej. 5.5.5.19), tras cambios en vixmusic/:
+cd xupertv && git push origin main
+# O manualmente: Actions → VixMusic iOS IPA → Run workflow
 ```
 
-Firma con tu Apple ID (AltStore / Sideloadly si no tienes cuenta de desarrollador).
+Descarga:
+
+- Servidor: `http://TU_IP/vixmusic/VixMusic.ipa`
+- GitHub Release: tag `vixmusic-ios-v1.0`
+
+Instalar con **eSign**, **AltStore** o **Sideloadly** (IPA sin firmar; hay que firmarla con tu Apple ID).
 
 ## Estructura
 

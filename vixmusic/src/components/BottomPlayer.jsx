@@ -1,6 +1,6 @@
 import { usePlayer } from '../context/PlayerContext';
 import { formatTime } from '../lib/utils';
-import { isFavorite, toggleFavorite } from '../lib/favorites';
+import { useAuth } from '../context/AuthContext';
 import DownloadButton from './DownloadButton';
 
 function IconShuffle({ on }) {
@@ -35,12 +35,15 @@ export default function BottomPlayer({ onOpenNowPlaying }) {
     resolving,
     retryCurrentTrack,
     offlineMode,
+    backgroundAudio,
+    useNativeAudio,
   } = usePlayer();
+  const { isFavorite, toggleFavorite } = useAuth();
 
   const pct = duration ? (progress / duration) * 100 : 0;
 
-  const onFav = () => {
-    if (track) toggleFavorite(track);
+  const onFav = async () => {
+    if (track) await toggleFavorite(track);
   };
 
   return (
@@ -74,7 +77,13 @@ export default function BottomPlayer({ onOpenNowPlaying }) {
         {(playerError || resolving) && (
           <div className="player-bar__status">
             <span>
-              {offlineMode && !playerError ? 'Modo offline' : resolving ? 'Buscando audio…' : playerError}
+              {offlineMode && !playerError
+                ? 'Modo offline'
+                : backgroundAudio && !playerError
+                  ? 'Reproduciendo en segundo plano'
+                  : resolving
+                    ? 'Buscando audio…'
+                    : playerError}
             </span>
             {playerError && track && !resolving && (
               <button type="button" className="player-bar__retry" onClick={retryCurrentTrack}>
