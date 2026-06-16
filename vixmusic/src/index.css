@@ -2223,6 +2223,37 @@ html.native-app .mobile-nav__item:active {
   margin: 0;
 }
 
+.update-modal__hint--error {
+  color: #ff8a8a;
+}
+
+.update-modal__hint--ok {
+  color: var(--accent);
+}
+
+.update-modal__progress-wrap {
+  margin: 12px 0 4px;
+}
+
+.update-modal__progress-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.15);
+  overflow: hidden;
+}
+
+.update-modal__progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+.update-modal__progress-text {
+  margin: 8px 0 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
 .modal {
   background: var(--bg-elevated); border-radius: 12px; padding: 28px;
   max-width: 440px; width: 100%;

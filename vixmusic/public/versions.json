@@ -1,14 +1,14 @@
 {
   "android": {
-    "version": "1.3.11",
-    "versionCode": 16,
+    "version": "1.3.12",
+    "versionCode": 17,
     "url": "http://5.5.5.8/vixmusic/VixMusic-release.apk",
-    "notes": "Icono nuevo de la app (ecualizador VixMusic) en launcher y splash."
+    "notes": "Actualización dentro de la app, sin abrir el navegador. El aviso no se repite si pulsas Más tarde."
   },
   "ios": {
-    "version": "1.3.11",
-    "build": 16,
+    "version": "1.3.12",
+    "build": 17,
     "url": "http://5.5.5.8/vixmusic/VixMusic.ipa",
-    "notes": "Icono nuevo de la app en pantalla de inicio."
+    "notes": "Mejoras en el aviso de actualización."
   }
 }
