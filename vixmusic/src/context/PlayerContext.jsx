@@ -16,16 +16,25 @@ import { getPipedAudioStreamUrl } from '../api/piped';
 import { resolveAudioStream } from '../lib/resolveAudio';
 import {
   unlockAudioElement,
-  resolveStreamPlaybackUrl,
   startStreamPlayback,
-  fetchStreamBlobUrl,
+  playNativeAudioTrack,
+  getServerPlayUrl,
   mapAudioError,
 } from '../lib/audioPlayback';
 import { setupMediaSession, setMediaPlaybackState, clearMediaSession } from '../lib/mediaSession';
 import {
   requestPlaybackPermissions,
   startBackgroundPlayback,
+  updateBackgroundPlayback,
   stopBackgroundPlayback,
+  onBackgroundMediaAction,
+  onNativePlaybackEvent,
+  playNativeStream,
+  getNativePlaybackStatus,
+  setNativePlaying,
+  setNativeVolume,
+  seekNativePlayback,
+  isNativePlatformPlayer,
 } from '../lib/backgroundPlayback';
 import { App } from '@capacitor/app';
 import { recordPlayForUser } from '../lib/recordPlay';
@@ -73,6 +82,7 @@ export function PlayerProvider({ children }) {
   const audioBlobUrlRef = useRef(null);
   const usingAudioRef = useRef(false);
   const audioModeRef = useRef(null);
+  const suppressAudioErrorRef = useRef(false);
 
   const [compatPlayback, setCompatPlaybackState] = useState(() => getCompatPlayback());
   const [offlineMode, setOfflineMode] = useState(false);
@@ -129,16 +139,17 @@ export function PlayerProvider({ children }) {
       audio.addEventListener('play', () => {
         setPlaying(true);
         setMediaPlaybackState(true);
-        const cur = queueRef.current[indexRef.current] || current;
-        startBackgroundPlayback(cur);
+        const cur = queueRef.current[indexRef.current];
+        if (cur) updateBackgroundPlayback(cur, true);
       });
       audio.addEventListener('pause', () => {
         setPlaying(false);
         setMediaPlaybackState(false);
-        stopBackgroundPlayback();
+        const cur = queueRef.current[indexRef.current];
+        if (cur) updateBackgroundPlayback(cur, false);
       });
       audio.addEventListener('error', () => {
-        if (!usingAudioRef.current) return;
+        if (!usingAudioRef.current || suppressAudioErrorRef.current) return;
         setPlayerError(mapAudioError(audio));
         setPlaying(false);
       });
@@ -148,12 +159,31 @@ export function PlayerProvider({ children }) {
 
   const bindMediaSession = useCallback((track) => {
     setupMediaSession(track, {
-      onPlay: () => audioRef.current?.play().catch(() => {}),
-      onPause: () => audioRef.current?.pause(),
+      onPlay: () => {
+        if (audioModeRef.current === 'native') {
+          setNativePlaying(true);
+          setPlaying(true);
+          setMediaPlaybackState(true);
+        } else {
+          audioRef.current?.play().catch(() => {});
+        }
+      },
+      onPause: () => {
+        if (audioModeRef.current === 'native') {
+          setNativePlaying(false);
+          setPlaying(false);
+          setMediaPlaybackState(false);
+        } else {
+          audioRef.current?.pause();
+        }
+      },
       onNext: () => nextRef.current(),
       onPrev: () => prevRef.current?.(),
       onSeek: (t) => {
-        if (audioRef.current) {
+        if (audioModeRef.current === 'native') {
+          seekNativePlayback(t);
+          setProgress(t);
+        } else if (audioRef.current) {
           audioRef.current.currentTime = t;
           setProgress(t);
         }
@@ -231,7 +261,7 @@ export function PlayerProvider({ children }) {
       bindMediaSession(track);
 
       if (fromUser) {
-        startBackgroundPlayback(track).then(() => {
+        updateBackgroundPlayback(track, true).then(() => {
           audio.play()
             .then(() => notePlayback(track))
             .catch(() => setPlayerError('No se pudo reproducir offline'));
@@ -275,30 +305,52 @@ export function PlayerProvider({ children }) {
         setResolving(false);
 
         const onStarted = () => {
-          if (fromUser) startBackgroundPlayback(resolved).catch(() => {});
+          if (fromUser) updateBackgroundPlayback(resolved, true).catch(() => {});
         };
 
-        if (useNativeAudio) {
+        if (useNativeAudio && isNativePlatformPlayer) {
+          usingAudioRef.current = true;
+          audioModeRef.current = 'native';
+          setOfflineMode(false);
+          suppressAudioErrorRef.current = true;
+          setPlayerError('Cargando canción…');
+          const videoId = stream.videoId || track.videoId;
+          const playUrls = [
+            getServerPlayUrl(videoId, '140'),
+            getServerPlayUrl(videoId, '251'),
+            getServerPlayUrl(videoId),
+          ];
           let started = false;
-          try {
-            await startStreamPlayback(audio, resolveStreamPlaybackUrl(stream.url), {
-              timeoutMs: 12000,
-              autoplay: fromUser,
-            });
-            started = true;
-            onStarted();
-          } catch {
-            /* streaming falló — respaldo con descarga completa */
-          }
-
-          if (!started) {
-            const blobUrl = await fetchStreamBlobUrl(stream.url, stream.mimeType);
-            if (audioBlobUrlRef.current?.startsWith('blob:')) {
-              URL.revokeObjectURL(audioBlobUrlRef.current);
+          for (const playUrl of playUrls) {
+            try {
+              await playNativeStream(resolved, playUrl, volume / 100);
+              started = true;
+              break;
+            } catch {
+              /* probar otro formato */
             }
-            audioBlobUrlRef.current = blobUrl;
-            await startStreamPlayback(audio, blobUrl, { timeoutMs: 15000, autoplay: fromUser });
+          }
+          suppressAudioErrorRef.current = false;
+          if (!started) throw new Error('No se pudo reproducir el audio');
+          setPlaying(true);
+          setMediaPlaybackState(true);
+        } else if (useNativeAudio) {
+          suppressAudioErrorRef.current = true;
+          setPlayerError('');
+          try {
+            await playNativeAudioTrack(audio, {
+              ...stream,
+              videoId: stream.videoId || track.videoId,
+            }, {
+              autoplay: fromUser,
+              onPhase: (phase) => {
+                if (phase === 'download') setPlayerError('Cargando canción…');
+                else if (phase === 'stream') setPlayerError('');
+              },
+            });
             onStarted();
+          } finally {
+            suppressAudioErrorRef.current = false;
           }
         } else {
           await startStreamPlayback(audio, stream.url, { timeoutMs: 12000, autoplay: fromUser });
@@ -559,6 +611,17 @@ export function PlayerProvider({ children }) {
   const next = useCallback(() => { advance(); }, [advance]);
 
   const prev = useCallback(() => {
+    if (audioModeRef.current === 'native') {
+      getNativePlaybackStatus().then((st) => {
+        if (st.position > 3) {
+          seekNativePlayback(0);
+          setProgress(0);
+        } else {
+          prevRef.current?.();
+        }
+      }).catch(() => prevRef.current?.());
+      return;
+    }
     if (usingAudioRef.current) {
       const audio = audioRef.current;
       if (audio && audio.currentTime > 3) {
@@ -587,6 +650,18 @@ export function PlayerProvider({ children }) {
   prevRef.current = prev;
 
   const toggle = useCallback(() => {
+    if (audioModeRef.current === 'native') {
+      if (playing) {
+        setNativePlaying(false);
+        setPlaying(false);
+        setMediaPlaybackState(false);
+      } else {
+        setNativePlaying(true);
+        setPlaying(true);
+        setMediaPlaybackState(true);
+      }
+      return;
+    }
     if (usingAudioRef.current) {
       const audio = audioRef.current;
       if (!audio) return;
@@ -612,9 +687,14 @@ export function PlayerProvider({ children }) {
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [playing]);
 
   const seek = useCallback((sec) => {
+    if (audioModeRef.current === 'native') {
+      seekNativePlayback(sec);
+      setProgress(sec);
+      return;
+    }
     if (usingAudioRef.current && audioRef.current) {
       audioRef.current.currentTime = sec;
       setProgress(sec);
@@ -724,12 +804,13 @@ export function PlayerProvider({ children }) {
               setPlayerError('');
               wantsPlayRef.current = false;
               const cur = queueRef.current[indexRef.current];
-              startBackgroundPlayback(cur);
+              if (cur) updateBackgroundPlayback(cur, true);
               if (cur) notePlayback(cur);
             }
             if (e.data === YT.PlayerState.PAUSED) {
               setPlaying(false);
-              stopBackgroundPlayback();
+              const cur = queueRef.current[indexRef.current];
+              if (cur) updateBackgroundPlayback(cur, false);
             }
             if (e.data === YT.PlayerState.ENDED) {
               stopBackgroundPlayback();
@@ -810,6 +891,61 @@ export function PlayerProvider({ children }) {
   }, [startVideo]);
 
   useEffect(() => {
+    if (!isNativePlatformPlayer) return undefined;
+    return onNativePlaybackEvent((event) => {
+      if (event?.type === 'ended') nextRef.current?.();
+      if (event?.type === 'playing') {
+        setPlaying(true);
+        setMediaPlaybackState(true);
+      }
+      if (event?.type === 'paused') {
+        setPlaying(false);
+        setMediaPlaybackState(false);
+      }
+      if (typeof event?.position === 'number') setProgress(event.position);
+      if (typeof event?.duration === 'number' && event.duration > 0) setDuration(event.duration);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!useNativeAudio) return undefined;
+
+    return onBackgroundMediaAction((action) => {
+      if (action === 'next') {
+        nextRef.current?.();
+        return;
+      }
+      if (action === 'prev') {
+        prevRef.current?.();
+        return;
+      }
+      if (action === 'play') {
+        if (audioModeRef.current === 'native') {
+          setNativePlaying(true);
+          setPlaying(true);
+          setMediaPlaybackState(true);
+        } else if (usingAudioRef.current) {
+          audioRef.current?.play().catch(() => {});
+        } else {
+          try { playerRef.current?.playVideo?.(); } catch { /* ignore */ }
+        }
+        return;
+      }
+      if (action === 'pause') {
+        if (audioModeRef.current === 'native') {
+          setNativePlaying(false);
+          setPlaying(false);
+          setMediaPlaybackState(false);
+        } else if (usingAudioRef.current) {
+          audioRef.current?.pause();
+        } else {
+          try { playerRef.current?.pauseVideo?.(); } catch { /* ignore */ }
+        }
+      }
+    });
+  }, []);
+
+  useEffect(() => {
     if (!useNativeAudio) return undefined;
     const onGesture = () => unlockAudioElement(ensureAudio());
     document.addEventListener('touchstart', onGesture, { once: true, passive: true });
@@ -868,6 +1004,10 @@ export function PlayerProvider({ children }) {
   }, [playerReady, startVideo]);
 
   useEffect(() => {
+    if (audioModeRef.current === 'native') {
+      setNativeVolume(volume);
+      return;
+    }
     if (usingAudioRef.current && audioRef.current) {
       audioRef.current.volume = volume / 100;
       return;
@@ -879,6 +1019,14 @@ export function PlayerProvider({ children }) {
   useEffect(() => {
     if (tickRef.current) clearInterval(tickRef.current);
     tickRef.current = setInterval(() => {
+      if (audioModeRef.current === 'native') {
+        getNativePlaybackStatus().then((st) => {
+          if (typeof st?.position === 'number') setProgress(st.position);
+          if (typeof st?.duration === 'number' && st.duration > 0) setDuration(st.duration);
+          if (typeof st?.playing === 'boolean') setPlaying(st.playing);
+        }).catch(() => {});
+        return;
+      }
       if (usingAudioRef.current) return;
       const p = playerRef.current;
       if (!p?.getCurrentTime) return;

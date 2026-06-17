@@ -20,12 +20,14 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onPause() {
+        keepWebViewAlive();
         super.onPause();
         keepWebViewAlive();
     }
 
     @Override
     public void onStop() {
+        keepWebViewAlive();
         super.onStop();
         keepWebViewAlive();
     }

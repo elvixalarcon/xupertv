@@ -26,6 +26,10 @@
 
         </activity>
 
+        <receiver
+            android:name=".MediaActionReceiver"
+            android:exported="false" />
+
         <service
             android:name=".MediaPlaybackService"
             android:exported="false"

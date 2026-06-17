@@ -1,6 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { getApiBase } from './appConfig';
 import { httpGetBlob } from './http';
+import { getCachedAudioBlob, setCachedAudioBlob } from './audioCache';
 
 export const YT_STREAM_HEADERS = {
   Referer: 'https://www.youtube.com/',
@@ -43,9 +44,27 @@ export function getProxiedStreamUrl(cdnUrl) {
   return `${api}/stream?url=${encodeURIComponent(cdnUrl)}`;
 }
 
+export function getServerPlayUrl(videoId, itag = '') {
+  const api = getApiBase();
+  const q = itag ? `&itag=${encodeURIComponent(itag)}` : '';
+  return `${api}/play?id=${encodeURIComponent(videoId)}${q}`;
+}
+
 export function resolveStreamPlaybackUrl(cdnUrl) {
   if (!isNativePlayback()) return cdnUrl;
   return getProxiedStreamUrl(cdnUrl);
+}
+
+function buildNativeSources(stream) {
+  const videoId = stream.videoId;
+  if (!videoId) return [];
+
+  const api = getApiBase();
+  return [
+    { playUrl: getServerPlayUrl(videoId, '140'), mimeType: 'audio/mp4', itag: '140' },
+    { playUrl: getServerPlayUrl(videoId, '251'), mimeType: 'audio/webm', itag: '251' },
+    { playUrl: getServerPlayUrl(videoId), mimeType: stream.mimeType || 'audio/mp4', itag: stream.itag || 'ba' },
+  ];
 }
 
 function waitForMediaReady(audio, timeoutMs) {
@@ -80,15 +99,78 @@ function waitForMediaReady(audio, timeoutMs) {
   });
 }
 
-/** Inicia streaming sin descargar el archivo completo. */
-export async function startStreamPlayback(audio, src, { timeoutMs = 12000, autoplay = true } = {}) {
+async function applyAudioSrc(audio, src, { timeoutMs = 8000, autoplay = true } = {}) {
   audio.src = src;
   audio.load();
   await waitForMediaReady(audio, timeoutMs);
   if (autoplay) await audio.play();
 }
 
-/** Descarga el audio completo y devuelve blob URL (solo respaldo). */
+/** Inicia streaming sin descargar el archivo completo. */
+export async function startStreamPlayback(audio, src, { timeoutMs = 8000, autoplay = true } = {}) {
+  await applyAudioSrc(audio, src, { timeoutMs, autoplay });
+}
+
+async function downloadPlayBlob(playUrl, mimeType) {
+  const blob = await httpGetBlob(playUrl, 180000);
+  return URL.createObjectURL(new Blob([blob], { type: mimeType || 'audio/mp4' }));
+}
+
+/**
+ * Reproducción fiable en apps nativas:
+ * 1) caché de sesión  2) stream corto  3) descarga vía /api/play
+ */
+export async function playNativeAudioTrack(audio, stream, { autoplay = true, onPhase } = {}) {
+  const videoId = stream.videoId;
+  if (!videoId) throw new Error('Sin ID de vídeo');
+
+  const cached = getCachedAudioBlob(videoId);
+  if (cached) {
+    onPhase?.('cache');
+    await applyAudioSrc(audio, cached, { timeoutMs: 6000, autoplay });
+    return { mode: 'cache' };
+  }
+
+  const sources = buildNativeSources(stream);
+
+  const blobJobs = sources.map((src) =>
+    downloadPlayBlob(src.playUrl, src.mimeType).catch(() => null),
+  );
+
+  onPhase?.('stream');
+  for (const src of sources) {
+    try {
+      await applyAudioSrc(audio, src.playUrl, { timeoutMs: 2500, autoplay });
+      return { mode: 'stream', itag: src.itag };
+    } catch {
+      audio.removeAttribute('src');
+      audio.load();
+    }
+  }
+
+  onPhase?.('download');
+  let lastErr;
+  for (let i = 0; i < sources.length; i += 1) {
+    const src = sources[i];
+    try {
+      let blobUrl = await blobJobs[i];
+      if (!blobUrl) {
+        blobUrl = await downloadPlayBlob(src.playUrl, src.mimeType);
+      }
+      setCachedAudioBlob(videoId, blobUrl);
+      await applyAudioSrc(audio, blobUrl, { timeoutMs: 12000, autoplay });
+      return { mode: 'blob', itag: src.itag };
+    } catch (e) {
+      lastErr = e;
+      audio.removeAttribute('src');
+      audio.load();
+    }
+  }
+
+  throw lastErr || new Error('No se pudo reproducir el audio');
+}
+
+/** Descarga el audio completo y devuelve blob URL (respaldo). */
 export async function fetchStreamBlobUrl(cdnUrl, mimeType = 'audio/mp4') {
   const attempts = isNativePlayback()
     ? [getProxiedStreamUrl(cdnUrl), cdnUrl]

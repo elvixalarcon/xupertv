@@ -4,6 +4,7 @@ import Capacitor
 class BridgeViewController: CAPBridgeViewController {
     override func capacitorDidLoad() {
         super.capacitorDidLoad()
+        bridge?.registerPluginType(BackgroundAudioPlugin.self)
         guard let webView = self.webView else { return }
         webView.isOpaque = true
         webView.backgroundColor = UIColor.black

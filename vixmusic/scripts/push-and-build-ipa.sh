@@ -34,7 +34,7 @@ git add -A
 if git diff --staged --quiet; then
   echo "Sin cambios"
 else
-  git commit -m "VixMusic 1.3.15: inicio personalizado por usuario"
+  git commit -m "VixMusic 1.3.19: AVPlayer nativo iOS para audio en segundo plano"
   git push origin main
 fi
 

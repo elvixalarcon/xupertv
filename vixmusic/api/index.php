@@ -48,6 +48,10 @@ function route(string $method, string $uri): void
         handle_resolve_audio();
     }
 
+    if ($uri === '/play' && $method === 'GET') {
+        handle_play();
+    }
+
     if ($uri === '/auth/register' && $method === 'POST') {
         handle_register();
     }
