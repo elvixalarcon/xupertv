@@ -16,7 +16,6 @@ public class BackgroundAudioPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "seek", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getPlaybackStatus", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "requestPermissions", returnType: CAPPluginReturnPromise),
     ]
 
     private var player: AVPlayer?
@@ -297,9 +296,5 @@ public class BackgroundAudioPlugin: CAPPlugin, CAPBridgedPlugin {
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
             call.resolve()
         }
-    }
-
-    @objc func requestPermissions(_ call: CAPPluginCall) {
-        call.resolve()
     }
 }
